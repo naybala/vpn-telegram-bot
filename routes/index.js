@@ -7,20 +7,20 @@ const handleGetKeys = require("../handlers/getKeys");
 const handlePhoto = require("../handlers/photo");
 const handleGenerate = require("../handlers/admin");
 
-const KPayPhoneNumber = "09968256835";
-const kpayOwner = "Htin Linn Phyo";
+const KPayPhoneNumber = "09763684400";
+const kpayOwner = "Nay Ba La";
 
 // ==================================================================
 // 👋 START COMMAND
 // ==================================================================
 bot.start((ctx) => {
   ctx.replyWithMarkdown(
-    ` **Yoke Lan VPNကို ကြိုဆိုပါတယ်!**\n\n\n` +
+    ` **Ye Gu Saung VPN မှကြိုဆိုပါတယ်!**\n\n\n` +
       `${DEFAULT_LIMIT_GB}GB Plan ဝယ်ယူရန်အတွက်\n\n` +
-      `1. **4,000 Ks** ကို KPay မှတစ်ဆင့် ပေးပို့ပါ \n${KPayPhoneNumber}(${kpayOwner})\n\n` +
+      `1. **7000 Ks** ကို KPay မှတစ်ဆင့် ပေးပို့ပါ \n${KPayPhoneNumber}(${kpayOwner})\n\n` +
       `2. Noteမှာ 'Family and Friends' ဟုရေးပေးပါ\n\n` +
       `3. ပေးပို့ပြီးနောက် **Screenshot** ကို ဒီ Chat ထဲတွင် တင်ပေးပါ။\n\n`,
-    mainMenu
+    mainMenu,
   );
 });
 
@@ -32,18 +32,18 @@ bot.start((ctx) => {
 bot.hears("၀ယ်မည်", (ctx) => {
   ctx.reply(
     `💳 **100GB ၀ယ်ယူရန်**\n\n` +
-      `1. **4,000 Ks** ကို KPay မှတစ်ဆင့် ပေးပို့ပါ\n` +
+      `1. **7000 Ks** ကို KPay မှတစ်ဆင့် ပေးပို့ပါ\n` +
       `\`${KPayPhoneNumber}\` - ${kpayOwner}\n` +
       `👆 **Tap to Copy** \n\n` +
       `2. Note မှာ 'Family and Friends' ဟုရေးပေးပါ\n` +
       `3. ပေးပို့ပြီးနောက် **Screenshot** ကို ဒီ Chat ထဲတွင် တင်ပေးပါ။`,
-    { parse_mode: "Markdown" }
+    { parse_mode: "Markdown" },
   );
 });
 
 // Contact
 bot.hears("ဆက်သွယ်ရန်", (ctx) =>
-  ctx.reply(`အက်ဒမင်ဆီသို့တိုက်ရိုက်ဆက်သွယ်ရန် @yokeLanAdmin`)
+  ctx.reply(`အက်ဒမင်ဆီသို့တိုက်ရိုက်ဆက်သွယ်ရန် @neverDavion`),
 );
 
 // Balance check
