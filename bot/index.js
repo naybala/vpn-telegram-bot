@@ -1,16 +1,28 @@
 const { Telegraf } = require("telegraf");
 const axios = require("axios");
 const https = require("https");
-const { BOT_TOKEN, SERVERS } = require("../config");
+const { HttpsProxyAgent } = require("https-proxy-agent");
+const { SocksProxyAgent } = require("socks-proxy-agent");
+const { BOT_TOKEN, SERVERS, BOT_PROXY } = require("../config");
 
 // ==================================================================
 // 🌐 BOT INSTANCE + API CLIENT
 // ==================================================================
-const ipv4Agent = new https.Agent({ family: 4 });
-const httpsAgent = new https.Agent({ family: 4, rejectUnauthorized: false });
+let telegramAgent = undefined;
+
+if (BOT_PROXY) {
+  if (BOT_PROXY.startsWith("socks")) {
+    telegramAgent = new SocksProxyAgent(BOT_PROXY);
+  } else {
+    telegramAgent = new HttpsProxyAgent(BOT_PROXY);
+  }
+  console.log(`📡 Using proxy for Telegram API: ${BOT_PROXY}`);
+}
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const bot = new Telegraf(BOT_TOKEN, {
-  telegram: { agent: ipv4Agent },
+  ...(telegramAgent ? { telegram: { agent: telegramAgent } } : {}),
 });
 
 /**
@@ -24,3 +36,4 @@ function getClient(serverIndex) {
 }
 
 module.exports = { bot, getClient };
+

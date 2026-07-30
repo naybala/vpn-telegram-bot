@@ -1,5 +1,6 @@
 const db = require("../db");
 const { getClient } = require("../bot");
+const { SERVERS } = require("../config");
 
 // ==================================================================
 // 📊 BALANCE CHECK HANDLER
@@ -21,6 +22,7 @@ async function handleBalance(ctx) {
     for (let i = 0; i < rows.length; i++) {
       const entry = rows[i];
       const serverIdx = entry.server_index;
+      const serverName = SERVERS[serverIdx] ? SERVERS[serverIdx].name : `Server #${serverIdx + 1}`;
       const keyId = entry.key_id;
       const createdAt = new Date(entry.created_at).toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -49,15 +51,16 @@ async function handleBalance(ctx) {
           const filled = Math.floor(percent / 10);
           const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
 
-          reportMessage += `🔑 **Key #${i + 1} **\n`;
+          reportMessage += `🔑 **Key #${i + 1} (${serverName})**\n`;
           reportMessage += `Created: **${createdAt}**\n`;
           reportMessage += `✅ Left: **${leftGB} GB** / ${limitGB} GB\n`;
           reportMessage += `[${bar}] ${percent}%\n------------------\n`;
         }
       } catch (e) {
-        reportMessage += `🔑 **Key #${i + 1}**: ⚠️ Offline\n`;
+        reportMessage += `🔑 **Key #${i + 1} (${serverName})**: ⚠️ Offline\n`;
       }
     }
+
 
     ctx.replyWithMarkdown(reportMessage);
   } catch (e) {
