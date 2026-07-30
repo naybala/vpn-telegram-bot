@@ -153,8 +153,22 @@ bot.hears("ဆက်သွယ်ရန်", (ctx) =>
 bot.hears("လက်ကျန်စစ်", handleBalance);
 bot.command("mybalance", handleBalance);
 
+const {
+  handleUserDeleteRequest,
+  handleUserDeleteConfirm,
+  handleAdminDeleteKey,
+} = require("../handlers/deleteKey");
+
 // Get saved keys
 bot.hears("🔑 မိမိ Key ယူရန်", handleGetKeys);
+
+// Delete key
+bot.hears("🗑️ Key ဖျက်မည်", handleUserDeleteRequest);
+bot.action(/^confirm_delete_key_(\d+)$/, handleUserDeleteConfirm);
+bot.action("cancel_delete_key", (ctx) => {
+  ctx.answerCbQuery("Cancelled");
+  ctx.editMessageText("❌ Key ဖျက်ခြင်းကို ပယ်ဖျက်လိုက်ပါပြီ။");
+});
 
 // How to use (instructions image)
 bot.hears("အသုံးပြုပုံ", (ctx) => {
@@ -169,11 +183,15 @@ bot.hears("အသုံးပြုပုံ", (ctx) => {
 // ==================================================================
 bot.on("photo", handlePhoto);
 
+const handleReissue = require("../handlers/reissue");
+
 // ==================================================================
 // 👮 ADMIN COMMANDS & ACTIONS
 // ==================================================================
 bot.command("generate", handleGenerate);  // /generate <userId> [photoId] [serverIdx]
 bot.command("extend", handleExtend);      // /extend <userId> [days]
+bot.command("reissue", handleReissue);    // /reissue <userId>
+bot.command("deletekey", handleAdminDeleteKey); // /deletekey <userId>
 
 // Admin Inline Action: Generate key
 bot.action(/^adm_gen_(\d+)_(\d+)$/, async (ctx) => {

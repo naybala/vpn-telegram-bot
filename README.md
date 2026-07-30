@@ -115,6 +115,8 @@ sequenceDiagram
 | `/chatid`   | `/chatid`                                    | Displays current Chat ID and type (Run inside group to find `GROUP_ID`). |
 | `/generate` | `/generate <userId> [photoId] [serverIndex]` | Manually generates an Outline key and sends it to the user.              |
 | `/extend`   | `/extend <userId> [days]`                    | Extends user subscription duration by X days without changing key.       |
+| `/reissue`  | `/reissue <userId>`                          | Re-creates a fresh key on Outline preserving original subscription expiry.|
+| `/deletekey`| `/deletekey <userId>`                        | Immediately revokes/deletes user's active key from Outline server & DB.  |
 
 ---
 

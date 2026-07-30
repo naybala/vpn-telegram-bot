@@ -6,7 +6,7 @@ const { Markup } = require("telegraf");
 const mainMenu = Markup.keyboard([
   ["လက်ကျန်စစ်", "🔑 မိမိ Key ယူရန်"],
   ["၀ယ်မည်", "ဆက်သွယ်ရန်"],
-  ["အသုံးပြုပုံ"],
+  ["အသုံးပြုပုံ", "🗑️ Key ဖျက်မည်"],
 ]).resize();
 
 module.exports = { mainMenu };
