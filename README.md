@@ -63,11 +63,11 @@ cp .env.example .env
 | Variable              | Description                                       | Example / Default                                 |
 | --------------------- | ------------------------------------------------- | ------------------------------------------------- |
 | `BOT_TOKEN`           | Telegram Bot API Token from @BotFather            | `8983851648:AA...`                                |
-| `ADMIN_ID`            | Telegram Numeric User ID of Super Admin           | `1410726179`                                      |
-| `GROUP_ID`            | Telegram Admin Group ID (Supergroup format)       | `-1003924459453`                                  |
+| `ADMIN_ID`            | Telegram Numeric User ID of Super Admin           | `xxxxxxxx`                                        |
+| `GROUP_ID`            | Telegram Admin Group ID (Supergroup format)       | `-100xxxxxxxxx`                                   |
 | `API_URLS`            | Comma-separated Outline API Secret URLs           | `https://ip1:port/secret,https://ip2:port/secret` |
 | `SERVER_NAMES`        | Comma-separated Server Display Names              | `Thailand 🇹🇭,Singapore 🇸🇬`                        |
-| `SERVER_PRICES`       | Comma-separated Server Prices                     | `7000 Ks,10000 Ks`                                |
+| `SERVER_PRICES`       | Comma-separated Server Prices                     | `xxx USD, xxx USD Ks`                             |
 | `DNS_HOSTNAMES`       | (Optional) Custom DNS domain mapping per server   | `th.domain.com,sg.domain.com`                     |
 | `KPAY_PHONE_NUMBER`   | KPay Transfer Phone Number                        | `09xxxxxxxxx`                                     |
 | `KPAY_OWNER`          | KPay Account Owner Name                           | `Korea Admin`                                     |
