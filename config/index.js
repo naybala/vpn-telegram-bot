@@ -10,10 +10,16 @@ const DEFAULT_LIMIT_GB = 100;
 const PLAN_DAYS = Number(process.env.PLAN_DAYS) || 30;  // Subscription duration in days
 
 // Load Server Lists
+// API_URLS — required, filter blanks
 const rawApiUrls = (process.env.API_URLS || "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-const rawDnsList = (process.env.DNS_HOSTNAMES || "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-const rawNames = (process.env.SERVER_NAMES || "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-const rawPrices = (process.env.SERVER_PRICES || "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+
+// Per-server optional lists — keep empty slots so index alignment is preserved.
+// e.g. DNS_HOSTNAMES=,sg.domain.com  →  server 0 gets null, server 1 gets "sg.domain.com"
+const splitKeepIndex = (val) => (val || "").split(",").map((s) => s.trim());
+
+const rawDnsList   = splitKeepIndex(process.env.DNS_HOSTNAMES);
+const rawNames     = splitKeepIndex(process.env.SERVER_NAMES);
+const rawPrices    = splitKeepIndex(process.env.SERVER_PRICES);
 
 // Validation
 const missing = [];
@@ -29,22 +35,60 @@ if (missing.length > 0) {
 }
 
 // Build Server Objects
+// dns   → null if slot is empty (raw IP is used, no replacement)
+// name  → "Server #N" fallback if slot is empty
+// price → "7000 Ks" fallback if slot is empty
 const SERVERS = rawApiUrls.map((url, index) => ({
   id: index,
   apiUrl: url,
-  dns: rawDnsList[index] || null,
-  name: rawNames[index] || `Server #${index + 1}`,
-  price: rawPrices[index] || "7000 Ks",
+  dns:   rawDnsList[index]  && rawDnsList[index].length > 0  ? rawDnsList[index]  : null,
+  name:  rawNames[index]    && rawNames[index].length > 0    ? rawNames[index]    : `Server #${index + 1}`,
+  price: rawPrices[index]   && rawPrices[index].length > 0   ? rawPrices[index]   : "7000 Ks",
 }));
+
 
 
 // Optional Proxy Config
 const BOT_PROXY = process.env.BOT_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || null;
 
-// Payment & Contact Info
-const KPayPhoneNumber = process.env.KPAY_PHONE_NUMBER || "09763684400";
-const kpayOwner = process.env.KPAY_OWNER || "Nay Ba La";
-const adminAccount = process.env.ADMIN_ACCOUNT || "@neverDavion";
+// Admin Contact
+const adminAccount = process.env.ADMIN_ACCOUNT || "@admin";
+
+// ==================================================================
+// 💳 PAYMENT METHODS
+// Each method is included only if its phone number is configured.
+// ==================================================================
+const PAYMENT_METHODS = [];
+
+if (process.env.KPAY_PHONE_NUMBER) {
+  PAYMENT_METHODS.push({
+    key:    "kpay",
+    label:  "💳 KPay",
+    phone:  process.env.KPAY_PHONE_NUMBER,
+    owner:  process.env.KPAY_OWNER || "",
+    note:   "Note မှာ 'Family and Friends' ဟုရေးပေးပါ",
+  });
+}
+
+if (process.env.AYAPAY_PHONE_NUMBER) {
+  PAYMENT_METHODS.push({
+    key:    "ayapay",
+    label:  "🏦 AyaPay",
+    phone:  process.env.AYAPAY_PHONE_NUMBER,
+    owner:  process.env.AYAPAY_OWNER || "",
+    note:   "AyaPay မှတစ်ဆင့် ပေးပို့ပါ",
+  });
+}
+
+if (process.env.CBPAY_PHONE_NUMBER) {
+  PAYMENT_METHODS.push({
+    key:    "cbpay",
+    label:  "🏧 CBPay",
+    phone:  process.env.CBPAY_PHONE_NUMBER,
+    owner:  process.env.CBPAY_OWNER || "",
+    note:   "CBPay မှတစ်ဆင့် ပေးပို့ပါ",
+  });
+}
 
 module.exports = {
   BOT_TOKEN,
@@ -54,12 +98,8 @@ module.exports = {
   PLAN_DAYS,
   SERVERS,
   BOT_PROXY,
-  KPayPhoneNumber,
-  kpayOwner,
   adminAccount,
-  KPAY_PHONE_NUMBER: KPayPhoneNumber,
-  KPAY_OWNER: kpayOwner,
-  ADMIN_ACCOUNT: adminAccount,
+  PAYMENT_METHODS,
 };
 
 

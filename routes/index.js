@@ -3,8 +3,7 @@ const { bot } = require("../bot");
 const {
   DEFAULT_LIMIT_GB,
   SERVERS,
-  KPayPhoneNumber,
-  kpayOwner,
+  PAYMENT_METHODS,
   adminAccount,
 } = require("../config");
 const { mainMenu } = require("../menus");
@@ -13,7 +12,6 @@ const handleGetKeys = require("../handlers/getKeys");
 const handlePhoto = require("../handlers/photo");
 const handleGenerate = require("../handlers/admin");
 const handleExtend = require("../handlers/extend");
-
 
 // ==================================================================
 // 👋 START COMMAND
@@ -38,28 +36,54 @@ bot.start((ctx) => {
 // 👂 BUTTON HANDLERS
 // ==================================================================
 
-// Buy (Shows Server Selection List)
+// Helper: build payment method buttons for a given server
+function paymentButtons(serverId) {
+  return PAYMENT_METHODS.map((pm) => [
+    Markup.button.callback(pm.label, `pay_${pm.key}_${serverId}`),
+  ]);
+}
+
+// Helper: build payment details message
+function paymentDetails(server, pm) {
+  return (
+    `💳 **${server.name} (${DEFAULT_LIMIT_GB}GB) — ${pm.label}**\n\n` +
+    `💰 ဈေးနှုန်း: **${server.price}**\n\n` +
+    `1. **${server.price}** ကို ${pm.label} မှတစ်ဆင့် ပေးပို့ပါ\n` +
+    `\`${pm.phone}\` — ${pm.owner}\n` +
+    `👆 **Tap to Copy**\n\n` +
+    `2. ${pm.note}\n` +
+    `3. ပေးပို့ပြီးနောက် **Screenshot** ကို ဒီ Chat ထဲတွင် တင်ပေးပါ။`
+  );
+}
+
+// Buy — Step 1: Show server list
 bot.hears("၀ယ်မည်", (ctx) => {
   if (SERVERS.length === 0) {
     return ctx.reply("❌ ရရှိနိုင်သော Server မရှိသေးပါ။");
   }
 
-  // If only 1 server, reply directly with payment details
+  // If only 1 server and 1 payment method, skip directly to payment details
+  if (SERVERS.length === 1 && PAYMENT_METHODS.length === 1) {
+    return ctx.reply(paymentDetails(SERVERS[0], PAYMENT_METHODS[0]), {
+      parse_mode: "Markdown",
+    });
+  }
+
+  // If only 1 server but multiple payment methods, skip server step
   if (SERVERS.length === 1) {
     const s = SERVERS[0];
+    const buttons = paymentButtons(s.id);
     return ctx.reply(
-      `💳 **${s.name} (${DEFAULT_LIMIT_GB}GB) ၀ယ်ယူရန်**\n\n` +
-        `💰 ဈေးနှုန်း: **${s.price}**\n\n` +
-        `1. **${s.price}** ကို KPay မှတစ်ဆင့် ပေးပို့ပါ\n` +
-        `\`${KPayPhoneNumber}\` - ${kpayOwner}\n` +
-        `👆 **Tap to Copy** \n\n` +
-        `2. Note မှာ 'Family and Friends' ဟုရေးပေးပါ\n` +
-        `3. ပေးပို့ပြီးနောက် **Screenshot** ကို ဒီ Chat ထဲတွင် တင်ပေးပါ။`,
-      { parse_mode: "Markdown" },
+      `🌐 **${s.name}** — ${s.price} / ${DEFAULT_LIMIT_GB}GB\n\n` +
+        `💳 **ငွေပေးချေနည်း ရွေးချယ်ပါ:**`,
+      {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard(buttons),
+      },
     );
   }
 
-  // Multiple servers: build inline keyboard buttons
+  // Multiple servers — show server selection
   const buttons = SERVERS.map((server) => [
     Markup.button.callback(
       `🌐 ${server.name} — ${server.price}`,
@@ -71,7 +95,7 @@ bot.hears("၀ယ်မည်", (ctx) => {
   SERVERS.forEach((server, index) => {
     msg += `${index + 1}. **${server.name}** — ${server.price} / ${DEFAULT_LIMIT_GB}GB\n`;
   });
-  msg += `\nမိမိ ဝယ်ယူလိုသော Server ကို အောက်ပါ Button မှ ရွေးချယ်ပါ:`;
+  msg += `\nမိမိ ဝယ်ယူလိုသော Server ကို Button မှ ရွေးချယ်ပါ:`;
 
   ctx.reply(msg, {
     parse_mode: "Markdown",
@@ -79,23 +103,45 @@ bot.hears("၀ယ်မည်", (ctx) => {
   });
 });
 
-// Callback Action when a user selects a server button
+// Buy — Step 2: Server selected → show payment method selection
 bot.action(/^select_server_(\d+)$/, (ctx) => {
   const serverId = parseInt(ctx.match[1], 10);
   const server = SERVERS[serverId];
   if (!server) return ctx.answerCbQuery("❌ Invalid Server");
 
   ctx.answerCbQuery();
+
+  // If only 1 payment method, skip to payment details directly
+  if (PAYMENT_METHODS.length === 1) {
+    return ctx.reply(paymentDetails(server, PAYMENT_METHODS[0]), {
+      parse_mode: "Markdown",
+    });
+  }
+
+  // Multiple payment methods — show payment selection
+  const buttons = paymentButtons(serverId);
   ctx.reply(
-    `💳 **${server.name} (${DEFAULT_LIMIT_GB}GB) ၀ယ်ယူရန်**\n\n` +
-      `💰 ဈေးနှုန်း: **${server.price}**\n\n` +
-      `1. **${server.price}** ကို KPay မှတစ်ဆင့် ပေးပို့ပါ\n` +
-      `\`${KPayPhoneNumber}\` - ${kpayOwner}\n` +
-      `👆 **Tap to Copy** \n\n` +
-      `2. Note မှာ 'Family and Friends' ဟုရေးပေးပါ\n` +
-      `3. ပေးပို့ပြီးနောက် **Screenshot** ကို ဒီ Chat ထဲတွင် တင်ပေးပါ။`,
-    { parse_mode: "Markdown" },
+    `✅ **${server.name}** ကို ရွေးချယ်ပြီးပါပြီ\n\n` +
+      `💳 **ငွေပေးချေနည်း ရွေးချယ်ပါ:**`,
+    {
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard(buttons),
+    },
   );
+});
+
+// Buy — Step 3: Payment method selected → show payment details
+bot.action(/^pay_([a-z]+)_(\d+)$/, (ctx) => {
+  const pmKey    = ctx.match[1];
+  const serverId = parseInt(ctx.match[2], 10);
+
+  const server = SERVERS[serverId];
+  const pm     = PAYMENT_METHODS.find((m) => m.key === pmKey);
+
+  if (!server || !pm) return ctx.answerCbQuery("❌ Invalid selection");
+
+  ctx.answerCbQuery();
+  ctx.reply(paymentDetails(server, pm), { parse_mode: "Markdown" });
 });
 
 // Contact
@@ -128,4 +174,7 @@ bot.on("photo", handlePhoto);
 // ==================================================================
 bot.command("generate", handleGenerate);  // /generate <userId> [photoId] [serverIdx]
 bot.command("extend", handleExtend);      // /extend <userId> [days]
+
+
+
 
