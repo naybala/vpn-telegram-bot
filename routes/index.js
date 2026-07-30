@@ -12,6 +12,8 @@ const handleBalance = require("../handlers/balance");
 const handleGetKeys = require("../handlers/getKeys");
 const handlePhoto = require("../handlers/photo");
 const handleGenerate = require("../handlers/admin");
+const handleExtend = require("../handlers/extend");
+
 
 // ==================================================================
 // 👋 START COMMAND
@@ -122,6 +124,8 @@ bot.hears("အသုံးပြုပုံ", (ctx) => {
 bot.on("photo", handlePhoto);
 
 // ==================================================================
-// 👮 ADMIN COMMAND
+// 👮 ADMIN COMMANDS
 // ==================================================================
-bot.command("generate", handleGenerate);
+bot.command("generate", handleGenerate);  // /generate <userId> [photoId] [serverIdx]
+bot.command("extend", handleExtend);      // /extend <userId> [days]
+

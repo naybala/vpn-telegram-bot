@@ -11,6 +11,7 @@ require("./db");           // Connects to MySQL (exits on failure)
 
 const { bot } = require("./bot");
 const { SERVERS } = require("./config");
+const { startExpiryJobs } = require("./handlers/expiry");
 require("./routes");       // Registers all bot handlers
 
 // ==================================================================
@@ -21,6 +22,7 @@ async function launchWithRetry(maxRetries = 10, delayMs = 3000) {
     try {
       await bot.launch();
       console.log(`🤖 Bot Online with ${SERVERS.length} server(s)...`);
+      startExpiryJobs(bot);   // Start daily expiry/warning cron jobs
       return;
     } catch (err) {
       const isNetworkError = ["EAI_AGAIN", "ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "ENOTFOUND"].includes(err.code);

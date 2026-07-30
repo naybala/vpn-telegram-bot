@@ -10,25 +10,42 @@ async function handleBalance(ctx) {
 
   try {
     const [rows] = await db.execute(
-      "SELECT * FROM user_keys WHERE telegram_id = ?",
+      "SELECT * FROM user_keys WHERE telegram_id = ? AND status = 'active' ORDER BY created_at DESC",
       [userId]
     );
 
-    if (rows.length === 0) return ctx.reply("❌ No active plan found.");
+    if (rows.length === 0) return ctx.reply("❌ No active plan found.\n\nVPN Plan ဝယ်ယူရန် '၀ယ်မည်' ကိုနှိပ်ပါ။");
 
-    let reportMessage = `📊 **Your Usage Report**\n\n`;
-    let activeCount = 0;
+    let reportMessage = `📊 **Your Active Plans**\n\n`;
 
     for (let i = 0; i < rows.length; i++) {
       const entry = rows[i];
       const serverIdx = entry.server_index;
       const serverName = SERVERS[serverIdx] ? SERVERS[serverIdx].name : `Server #${serverIdx + 1}`;
       const keyId = entry.key_id;
+
       const createdAt = new Date(entry.created_at).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
+        day: "2-digit", month: "2-digit", year: "numeric",
       });
+
+      // Expiry info
+      let expiryText = "♾️ No Expiry";
+      let daysLeft = null;
+      if (entry.expires_at) {
+        const expiresAt = new Date(entry.expires_at);
+        const now = new Date();
+        daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+        const expiresDisplay = expiresAt.toLocaleDateString("en-GB", {
+          day: "2-digit", month: "2-digit", year: "numeric",
+        });
+        if (daysLeft <= 0) {
+          expiryText = `❌ Expired`;
+        } else if (daysLeft <= 3) {
+          expiryText = `⚠️ Expires **${expiresDisplay}** (${daysLeft} day(s) left!)`;
+        } else {
+          expiryText = `📅 Expires **${expiresDisplay}** (${daysLeft} days left)`;
+        }
+      }
 
       try {
         const client = getClient(serverIdx);
@@ -39,11 +56,11 @@ async function handleBalance(ctx) {
 
         const keyData = keysRes.data.accessKeys.find((k) => k.id === keyId);
         if (keyData) {
-          activeCount++;
           const usedBytes = metricsRes.data.bytesTransferredByUserId[keyId] || 0;
           const limitBytes = keyData.dataLimit ? keyData.dataLimit.bytes : 0;
+          const usedGB = (usedBytes / 1024 ** 3).toFixed(2);
           const limitGB = (limitBytes / 1024 ** 3).toFixed(2);
-          const leftGB = ((limitBytes - usedBytes) / 1024 ** 3).toFixed(2);
+          const leftGB = Math.max(0, (limitBytes - usedBytes) / 1024 ** 3).toFixed(2);
 
           let percent = 0;
           if (limitBytes > 0)
@@ -51,16 +68,19 @@ async function handleBalance(ctx) {
           const filled = Math.floor(percent / 10);
           const bar = "▓".repeat(filled) + "░".repeat(10 - filled);
 
-          reportMessage += `🔑 **Key #${i + 1} (${serverName})**\n`;
-          reportMessage += `Created: **${createdAt}**\n`;
-          reportMessage += `✅ Left: **${leftGB} GB** / ${limitGB} GB\n`;
-          reportMessage += `[${bar}] ${percent}%\n------------------\n`;
+          reportMessage += `🔑 **Key #${i + 1}** — ${serverName}\n`;
+          reportMessage += `📆 Created: **${createdAt}**\n`;
+          reportMessage += `${expiryText}\n`;
+          reportMessage += `💾 Used: **${usedGB} GB** / ${limitGB} GB — Left: **${leftGB} GB**\n`;
+          reportMessage += `[${bar}] ${percent}%\n`;
+          reportMessage += `──────────────────\n`;
         }
       } catch (e) {
-        reportMessage += `🔑 **Key #${i + 1} (${serverName})**: ⚠️ Offline\n`;
+        reportMessage += `🔑 **Key #${i + 1} (${serverName})**: ⚠️ Server Offline\n`;
+        reportMessage += `${expiryText}\n`;
+        reportMessage += `──────────────────\n`;
       }
     }
-
 
     ctx.replyWithMarkdown(reportMessage);
   } catch (e) {
@@ -70,3 +90,4 @@ async function handleBalance(ctx) {
 }
 
 module.exports = handleBalance;
+
