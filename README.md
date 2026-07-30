@@ -31,13 +31,16 @@ An automated, multi-server **Outline VPN** subscription management and payment b
 ## 🚀 Quick Start & Installation
 
 ### 1. Clone & Install Dependencies
+
 ```bash
 cd vpn-telegram-bot
 npm install
 ```
 
 ### 2. Set Up Database
+
 Import the SQL schema files into your MySQL database:
+
 ```sql
 CREATE DATABASE vpn_bot DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE vpn_bot;
@@ -46,7 +49,9 @@ USE vpn_bot;
 ```
 
 ### 3. Configure Environment Variables
+
 Copy `.env.example` to `.env` and fill in your details:
+
 ```bash
 cp .env.example .env
 ```
@@ -55,26 +60,26 @@ cp .env.example .env
 
 ## ⚙️ Configuration (`.env`)
 
-| Variable | Description | Example / Default |
-|---|---|---|
-| `BOT_TOKEN` | Telegram Bot API Token from @BotFather | `8983851648:AA...` |
-| `ADMIN_ID` | Telegram Numeric User ID of Super Admin | `1410726179` |
-| `GROUP_ID` | Telegram Admin Group ID (Supergroup format) | `-1003924459453` |
-| `API_URLS` | Comma-separated Outline API Secret URLs | `https://ip1:port/secret,https://ip2:port/secret` |
-| `SERVER_NAMES` | Comma-separated Server Display Names | `Thailand 🇹🇭,Singapore 🇸🇬` |
-| `SERVER_PRICES` | Comma-separated Server Prices | `7000 Ks,10000 Ks` |
-| `DNS_HOSTNAMES` | (Optional) Custom DNS domain mapping per server | `th.domain.com,sg.domain.com` |
-| `KPAY_PHONE_NUMBER` | KPay Transfer Phone Number | `09xxxxxxxxx` |
-| `KPAY_OWNER` | KPay Account Owner Name | `Nay Ba La` |
-| `AYAPAY_PHONE_NUMBER` | AyaPay Transfer Phone Number | `09xxxxxxxxx` |
-| `AYAPAY_OWNER` | AyaPay Account Owner Name | `Nay Ba La` |
-| `CBPAY_PHONE_NUMBER` | CBPay Transfer Phone Number | `09xxxxxxxxx` |
-| `CBPAY_OWNER` | CBPay Account Owner Name | `Nay Ba La` |
-| `DEFAULT_LIMIT_GB` | Monthly Data Limit per key (in GB) | `100` |
-| `PLAN_DAYS` | Default subscription period (in days) | `30` |
-| `WARN_DAYS_BEFORE` | Pre-expiry warning threshold (in days) | `3` |
-| `TIMEZONE` | Cron job timezone | `Asia/Rangoon` |
-| `HTTPS_PROXY` | (Optional) HTTP Proxy URL for restricted networks | `http://127.0.0.1:8080` |
+| Variable              | Description                                       | Example / Default                                 |
+| --------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| `BOT_TOKEN`           | Telegram Bot API Token from @BotFather            | `8983851648:AA...`                                |
+| `ADMIN_ID`            | Telegram Numeric User ID of Super Admin           | `1410726179`                                      |
+| `GROUP_ID`            | Telegram Admin Group ID (Supergroup format)       | `-1003924459453`                                  |
+| `API_URLS`            | Comma-separated Outline API Secret URLs           | `https://ip1:port/secret,https://ip2:port/secret` |
+| `SERVER_NAMES`        | Comma-separated Server Display Names              | `Thailand 🇹🇭,Singapore 🇸🇬`                        |
+| `SERVER_PRICES`       | Comma-separated Server Prices                     | `7000 Ks,10000 Ks`                                |
+| `DNS_HOSTNAMES`       | (Optional) Custom DNS domain mapping per server   | `th.domain.com,sg.domain.com`                     |
+| `KPAY_PHONE_NUMBER`   | KPay Transfer Phone Number                        | `09xxxxxxxxx`                                     |
+| `KPAY_OWNER`          | KPay Account Owner Name                           | `Korea Admin`                                     |
+| `AYAPAY_PHONE_NUMBER` | AyaPay Transfer Phone Number                      | `09xxxxxxxxx`                                     |
+| `AYAPAY_OWNER`        | AyaPay Account Owner Name                         | `Korea Admin`                                     |
+| `CBPAY_PHONE_NUMBER`  | CBPay Transfer Phone Number                       | `09xxxxxxxxx`                                     |
+| `CBPAY_OWNER`         | CBPay Account Owner Name                          | `Korea Admin`                                     |
+| `DEFAULT_LIMIT_GB`    | Monthly Data Limit per key (in GB)                | `100`                                             |
+| `PLAN_DAYS`           | Default subscription period (in days)             | `30`                                              |
+| `WARN_DAYS_BEFORE`    | Pre-expiry warning threshold (in days)            | `3`                                               |
+| `TIMEZONE`            | Cron job timezone                                 | `Asia/Rangoon`                                    |
+| `HTTPS_PROXY`         | (Optional) HTTP Proxy URL for restricted networks | `http://127.0.0.1:8080`                           |
 
 ---
 
@@ -105,22 +110,24 @@ sequenceDiagram
 
 ## 👮 Admin Commands
 
-| Command | Usage | Description |
-|---|---|---|
-| `/chatid` | `/chatid` | Displays current Chat ID and type (Run inside group to find `GROUP_ID`). |
-| `/generate` | `/generate <userId> [photoId] [serverIndex]` | Manually generates an Outline key and sends it to the user. |
-| `/extend` | `/extend <userId> [days]` | Extends user subscription duration by X days without changing key. |
+| Command     | Usage                                        | Description                                                              |
+| ----------- | -------------------------------------------- | ------------------------------------------------------------------------ |
+| `/chatid`   | `/chatid`                                    | Displays current Chat ID and type (Run inside group to find `GROUP_ID`). |
+| `/generate` | `/generate <userId> [photoId] [serverIndex]` | Manually generates an Outline key and sends it to the user.              |
+| `/extend`   | `/extend <userId> [days]`                    | Extends user subscription duration by X days without changing key.       |
 
 ---
 
 ## 🏃 Running the Bot
 
 ### Development / Production Mode
+
 ```bash
 node index.js
 ```
 
 ### Process Management with PM2
+
 ```bash
 npm install -g pm2
 pm2 start index.js --name "vpn-bot"
@@ -131,4 +138,5 @@ pm2 startup
 ---
 
 ## 📄 License
+
 [MIT](LICENSE)
