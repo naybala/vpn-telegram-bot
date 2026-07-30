@@ -10,8 +10,8 @@ const { mainMenu } = require("../menus");
 const handleBalance = require("../handlers/balance");
 const handleGetKeys = require("../handlers/getKeys");
 const handlePhoto = require("../handlers/photo");
-const handleGenerate = require("../handlers/admin");
-const handleExtend = require("../handlers/extend");
+const { handleGenerate, executeGenerateKey } = require("../handlers/admin");
+const { handleExtend, executeExtendKey } = require("../handlers/extend");
 
 // ==================================================================
 // 👋 START COMMAND
@@ -170,10 +170,74 @@ bot.hears("အသုံးပြုပုံ", (ctx) => {
 bot.on("photo", handlePhoto);
 
 // ==================================================================
-// 👮 ADMIN COMMANDS
+// 👮 ADMIN COMMANDS & ACTIONS
 // ==================================================================
 bot.command("generate", handleGenerate);  // /generate <userId> [photoId] [serverIdx]
 bot.command("extend", handleExtend);      // /extend <userId> [days]
+
+// Admin Inline Action: Generate key
+bot.action(/^adm_gen_(\d+)_(\d+)$/, async (ctx) => {
+  const targetUserId = ctx.match[1];
+  const serverIndex = parseInt(ctx.match[2], 10);
+  const adminName = ctx.from.first_name || "Admin";
+
+  try {
+    await ctx.answerCbQuery("⏳ Key ပြုလုပ်နေသည်...");
+    const res = await executeGenerateKey({
+      targetUserId,
+      serverIndex,
+      telegram: ctx.telegram,
+    });
+
+    const originalText = ctx.callbackQuery.message.text || "";
+    await ctx.editMessageText(
+      `${originalText}\n\n` +
+      `✅ **Approved & Key Generated!**\n` +
+      `👤 User: \`${targetUserId}\`\n` +
+      `🌐 Server: **${res.serverName}** (Expires ${res.expiresDisplay})\n` +
+      `👮 Approved by: **${adminName}**`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (e) {
+    ctx.reply(`❌ Key generation error: ${e.message}`);
+  }
+});
+
+// Admin Inline Action: Extend plan
+bot.action(/^adm_ext_(\d+)$/, async (ctx) => {
+  const targetUserId = ctx.match[1];
+  const adminName = ctx.from.first_name || "Admin";
+
+  try {
+    await ctx.answerCbQuery("⏳ သက်တမ်းတိုးနေသည်...");
+    const res = await executeExtendKey({
+      targetUserId,
+      telegram: ctx.telegram,
+    });
+
+    const originalText = ctx.callbackQuery.message.text || "";
+    await ctx.editMessageText(
+      `${originalText}\n\n` +
+      `✅ **Plan Extended!**\n` +
+      `👤 User: \`${targetUserId}\` (+${res.daysToAdd} days)\n` +
+      `📅 New Expiry: **${res.newExpiryDisplay}**\n` +
+      `👮 Approved by: **${adminName}**`,
+      { parse_mode: "Markdown" }
+    );
+  } catch (e) {
+    ctx.reply(`❌ Extension error: ${e.message}`);
+  }
+});
+
+// Utility: run /chatid inside any group to get its real chat ID for GROUP_ID in .env
+bot.command("chatid", (ctx) => {
+  const id   = ctx.chat.id;
+  const type = ctx.chat.type;
+  const title = ctx.chat.title || ctx.chat.first_name || "private";
+  ctx.reply(`🆔 Chat ID: \`${id}\`\nType: ${type}\nName: ${title}`, { parse_mode: "Markdown" });
+});
+
+
 
 
 

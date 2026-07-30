@@ -1,3 +1,4 @@
+const { Markup } = require("telegraf");
 const { GROUP_ID, SERVERS, PLAN_DAYS } = require("../config");
 const { mainMenu } = require("../menus");
 const db = require("../db");
@@ -5,19 +6,23 @@ const db = require("../db");
 // ==================================================================
 // 📸 PAYMENT PHOTO HANDLER
 // Checks if user has an active key (renewal) or is a new customer.
-// Forwards receipt + appropriate admin command to the admin group.
+// Forwards receipt + interactive approval buttons to admin group.
 // ==================================================================
 async function handlePhoto(ctx) {
   const userId = ctx.from.id;
   const username = ctx.from.first_name || "User";
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
 
-  // Acknowledge to the user
-  await ctx.reply(
-    `✅ **Receipt ရပြီ!** စစ်ဆေးနေပါသည်...\n\n` +
-    `Admin မှ မကြာမီ ဆောင်ရွက်ပေးမည်ဖြစ်သည်။ ခဏစောင့်ပါ 🙏`,
-    { parse_mode: "Markdown", ...mainMenu }
-  );
+  // Acknowledge to the user immediately (always, even if admin forwarding fails)
+  try {
+    await ctx.reply(
+      `✅ **Receipt ရပြီ!** စစ်ဆေးနေပါသည်...\n\n` +
+      `Admin မှ မကြာမီ ဆောင်ရွက်ပေးမည်ဖြစ်သည်။ ခဏစောင့်ပါ 🙏`,
+      { parse_mode: "Markdown", ...mainMenu }
+    );
+  } catch (e) {
+    console.warn("⚠️ Could not reply to user:", e.message);
+  }
 
   // Check if user already has an active key
   let existingKeys = [];
@@ -48,38 +53,54 @@ async function handlePhoto(ctx) {
         })
       : "No expiry set";
 
-    caption += `🌐 Server: **${serverName}**\n`;
+    caption += `🌐 Current Server: **${serverName}**\n`;
     caption += `📅 Current Expiry: **${currentExpiry}**\n`;
-    caption += `➕ Extend by: **${PLAN_DAYS} days**`;
+    caption += `➕ Extension Plan: **+${PLAN_DAYS} days**`;
   }
 
-  // Forward receipt photo to admin group
-  await ctx.telegram.sendPhoto(GROUP_ID, photo.file_id, {
-    caption,
-    parse_mode: "Markdown",
-  });
+  // Forward receipt photo + admin action buttons to admin group
+  try {
+    await ctx.telegram.sendPhoto(GROUP_ID, photo.file_id, {
+      caption,
+      parse_mode: "Markdown",
+    });
 
-  // Send pre-filled admin command
-  if (isRenewal) {
-    // Renewal: suggest /extend command
-    await ctx.telegram.sendMessage(
-      GROUP_ID,
-      `📋 **Action needed:**\n\n` +
-      `✅ Tap to extend plan:\n/extend ${userId}\n\n` +
-      `Or extend by custom days:\n/extend ${userId} 30\n\n` +
-      `🆕 Or create a new key instead:\n/generate ${userId} ${photo.file_id}`,
-      { parse_mode: "Markdown" }
-    );
-  } else {
-    // New user: suggest /generate command
-    await ctx.telegram.sendMessage(
-      GROUP_ID,
-      `📋 **Action needed:**\n\n` +
-      `✅ Tap to generate new key:\n/generate ${userId} ${photo.file_id}`,
-      { parse_mode: "Markdown" }
-    );
+    // Build interactive inline action buttons
+    const inlineButtons = [];
+
+    if (isRenewal) {
+      inlineButtons.push([
+        Markup.button.callback(`🔄 Thantang Toke (+${PLAN_DAYS} Days)`, `adm_ext_${userId}`)
+      ]);
+    }
+
+    SERVERS.forEach((server, idx) => {
+      inlineButtons.push([
+        Markup.button.callback(`⚡ Key App: ${server.name}`, `adm_gen_${userId}_${idx}`)
+      ]);
+    });
+
+    let actionText = `📋 **Action Needed for User \`${userId}\`**\n\n`;
+    actionText += `Click button below to approve instantly:\n\n`;
+    actionText += `Manual command (tap to copy):\n`;
+    if (isRenewal) {
+      actionText += `\`\`\`\n/extend ${userId}\n\`\`\``;
+    } else {
+      actionText += `\`\`\`\n/generate ${userId} 1\n\`\`\``;
+    }
+
+    await ctx.telegram.sendMessage(GROUP_ID, actionText, {
+      parse_mode: "Markdown",
+      ...Markup.inlineKeyboard(inlineButtons),
+    });
+  } catch (e) {
+    console.error(`❌ Could not forward to admin group (GROUP_ID=${GROUP_ID}): ${e.message}`);
+    console.error(`   → If the group was upgraded to a supergroup, update GROUP_ID in .env`);
   }
 }
+
+module.exports = handlePhoto;
+
 
 module.exports = handlePhoto;
 
