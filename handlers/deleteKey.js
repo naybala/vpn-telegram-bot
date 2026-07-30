@@ -72,18 +72,17 @@ async function handleUserDeleteConfirm(ctx) {
     try {
       const client = getClient(serverIndex);
       await client.delete(`/access-keys/${key.key_id}`);
+      console.log(`✅ Deleted Outline Key ID ${key.key_id} from Server Index ${serverIndex}`);
     } catch (err) {
       console.warn("⚠️ Could not delete key from Outline server:", err.message);
     }
 
-    // Update status in DB
-    await db.execute(
-      "UPDATE user_keys SET status = 'expired' WHERE id = ?",
-      [key.id]
-    );
+    // Delete record completely from MySQL DB table
+    await db.execute("DELETE FROM user_keys WHERE id = ?", [key.id]);
 
     await ctx.editMessageText(
       `✅ **VPN Key ကို အောင်မြင်စွာ ဖျက်လိုက်ပါပြီ။**\n\n` +
+      `Server နှင့် Database မှ ရာသက်ပန် ဖျက်ဆီးပြီးဖြစ်သည်။\n` +
       `နောက်တစ်ကြိမ် ဝယ်ယူလိုပါက **'၀ယ်မည်'** Button မှတစ်ဆင့် ဝယ်ယူနိုင်ပါသည်။`,
       { parse_mode: "Markdown" }
     );
@@ -112,23 +111,25 @@ async function handleAdminDeleteKey(ctx) {
 
   try {
     const [rows] = await db.execute(
-      `SELECT * FROM user_keys WHERE telegram_id = ? AND status = 'active'`,
+      `SELECT * FROM user_keys WHERE telegram_id = ?`,
       [targetUserId]
     );
 
     if (rows.length === 0) {
-      return ctx.reply(`❌ No active key found for user \`${targetUserId}\`.`, { parse_mode: "Markdown" });
+      return ctx.reply(`❌ No key records found for user \`${targetUserId}\`.`, { parse_mode: "Markdown" });
     }
 
     for (const key of rows) {
       try {
         const client = getClient(key.server_index);
         await client.delete(`/access-keys/${key.key_id}`);
+        console.log(`✅ Deleted Outline Key ID ${key.key_id} from Server Index ${key.server_index}`);
       } catch (err) {
         console.warn(`⚠️ Could not delete key ${key.key_id} from server:`, err.message);
       }
 
-      await db.execute("UPDATE user_keys SET status = 'expired' WHERE id = ?", [key.id]);
+      // Hard delete row from DB table
+      await db.execute("DELETE FROM user_keys WHERE id = ?", [key.id]);
     }
 
     // Notify user
@@ -139,7 +140,7 @@ async function handleAdminDeleteKey(ctx) {
       );
     } catch (_) {}
 
-    ctx.reply(`✅ Deleted active key(s) for user \`${targetUserId}\` from Outline server and database.`, { parse_mode: "Markdown" });
+    ctx.reply(`✅ Permanently deleted all key(s) for user \`${targetUserId}\` from Outline server and database.`, { parse_mode: "Markdown" });
   } catch (e) {
     console.error("Error in handleAdminDeleteKey:", e);
     ctx.reply(`❌ Delete failed: ${e.message}`);

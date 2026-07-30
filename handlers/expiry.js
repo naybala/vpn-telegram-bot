@@ -84,9 +84,9 @@ async function expireOverdueKeys() {
         }
       }
 
-      // 2. Mark as expired in DB
+      // 2. Delete key row permanently from DB
       await db.execute(
-        "UPDATE user_keys SET status = 'expired' WHERE id = ?",
+        "DELETE FROM user_keys WHERE id = ?",
         [row.id]
       );
 
