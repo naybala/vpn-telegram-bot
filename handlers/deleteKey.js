@@ -7,7 +7,7 @@ const db = require("../db");
 // 🗑️ DELETE KEY HANDLERS (User & Admin)
 // ==================================================================
 
-// 1. User taps "🗑️ Key ဖျက်မည်" button -> ask confirmation
+// 1. User taps "🗑️ Key ဖျက်မည်" button -> ask confirmation or list keys
 async function handleUserDeleteRequest(ctx) {
   const userId = String(ctx.from.id).trim();
 
@@ -23,24 +23,45 @@ async function handleUserDeleteRequest(ctx) {
       return ctx.reply("❌ သင့်တွင် ဖျက်ရန် Active ဖြစ်နေသော Key မရှိပါ။");
     }
 
-    const key = rows[0];
-    const serverName = SERVERS[key.server_index]
-      ? SERVERS[key.server_index].name
-      : `Server #${key.server_index + 1}`;
+    // Single key -> direct confirmation button
+    if (rows.length === 1) {
+      const key = rows[0];
+      const serverName = SERVERS[key.server_index]
+        ? SERVERS[key.server_index].name
+        : `Server #${key.server_index + 1}`;
 
-    const buttons = Markup.inlineKeyboard([
-      [
-        Markup.button.callback("🗑️ သေချာပါသည် (Delete)", `confirm_delete_key_${key.id}`),
-        Markup.button.callback("❌ မဖျက်ပါ။ (Cancel)", "cancel_delete_key"),
-      ],
-    ]);
+      const buttons = Markup.inlineKeyboard([
+        [
+          Markup.button.callback("🗑️ သေချာပါသည် (Delete)", `confirm_delete_key_${key.id}`),
+          Markup.button.callback("❌ မဖျက်ပါ။ (Cancel)", "cancel_delete_key"),
+        ],
+      ]);
+
+      return ctx.reply(
+        `⚠️ **VPN Key ဖျက်ရန် အတည်ပြုပါ:**\n\n` +
+        `🌐 Server: **${serverName}**\n` +
+        `🔑 Name: \`${key.generated_user_name}\`\n\n` +
+        `Key ကို ဖျက်လိုက်ပါက Server မှ ချက်ချင်း ဖျက်ဆီးသွားမည်ဖြစ်ပြီး ပြန်လည် အသုံးပြု၍ ရတော့မည် မဟုတ်ပါ။`,
+        { parse_mode: "Markdown", ...buttons }
+      );
+    }
+
+    // Multiple keys -> show key selection list
+    const buttons = rows.map((key) => {
+      const serverName = SERVERS[key.server_index]
+        ? SERVERS[key.server_index].name
+        : `Server #${key.server_index + 1}`;
+      return [
+        Markup.button.callback(`🗑️ Delete: ${serverName} (${key.generated_user_name})`, `confirm_delete_key_${key.id}`)
+      ];
+    });
+
+    buttons.push([Markup.button.callback("❌ မဖျက်ပါ။ (Cancel)", "cancel_delete_key")]);
 
     ctx.reply(
-      `⚠️ **VPN Key ဖျက်ရန် အတည်ပြုပါ:**\n\n` +
-      `🌐 Server: **${serverName}**\n` +
-      `🔑 Name: \`${key.generated_user_name}\`\n\n` +
-      `Key ကို ဖျက်လိုက်ပါက Server မှ ချက်ချင်း ဖျက်ဆီးသွားမည်ဖြစ်ပြီး ပြန်လည် အသုံးပြု၍ ရတော့မည် မဟုတ်ပါ။`,
-      { parse_mode: "Markdown", ...buttons }
+      `🗑️ **ဖျက်လိုသော VPN Key ကို ရွေးချယ်ပါ:**\n\n` +
+      `သင့်တွင် Active Key **${rows.length}** ခု ရှိပါသည်။`,
+      { parse_mode: "Markdown", ...Markup.inlineKeyboard(buttons) }
     );
   } catch (e) {
     console.error("Error in handleUserDeleteRequest:", e);

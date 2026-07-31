@@ -222,14 +222,16 @@ bot.action(/^adm_gen_(\d+)_(\d+)$/, async (ctx) => {
 });
 
 // Admin Inline Action: Extend plan
-bot.action(/^adm_ext_(\d+)$/, async (ctx) => {
+bot.action(/^adm_ext_(\d+)(?:_(\d+))?$/, async (ctx) => {
   const targetUserId = ctx.match[1];
+  const keyDbId = ctx.match[2] ? parseInt(ctx.match[2], 10) : null;
   const adminName = ctx.from.first_name || "Admin";
 
   try {
     await ctx.answerCbQuery("⏳ သက်တမ်းတိုးနေသည်...");
     const res = await executeExtendKey({
       targetUserId,
+      keyDbId,
       telegram: ctx.telegram,
     });
 
@@ -238,6 +240,7 @@ bot.action(/^adm_ext_(\d+)$/, async (ctx) => {
       `${originalText}\n\n` +
       `✅ **Plan Extended!**\n` +
       `👤 User: \`${targetUserId}\` (+${res.daysToAdd} days)\n` +
+      `🌐 Server: **${res.serverName}**\n` +
       `📅 New Expiry: **${res.newExpiryDisplay}**\n` +
       `👮 Approved by: **${adminName}**`,
       { parse_mode: "Markdown" }

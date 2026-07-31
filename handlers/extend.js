@@ -4,16 +4,24 @@ const db = require("../db");
 // ==================================================================
 // 🔄 CORE EXTEND LOGIC
 // ==================================================================
-async function executeExtendKey({ targetUserId, daysToAdd = PLAN_DAYS, telegram }) {
-  const [rows] = await db.execute(
-    `SELECT * FROM user_keys
-     WHERE telegram_id = ? AND status = 'active'
-     ORDER BY created_at DESC LIMIT 1`,
-    [targetUserId]
-  );
+async function executeExtendKey({ targetUserId, keyDbId = null, daysToAdd = PLAN_DAYS, telegram }) {
+  let rows = [];
+  if (keyDbId) {
+    [rows] = await db.execute(
+      `SELECT * FROM user_keys WHERE id = ? AND telegram_id = ?`,
+      [keyDbId, targetUserId]
+    );
+  } else {
+    [rows] = await db.execute(
+      `SELECT * FROM user_keys
+       WHERE telegram_id = ? AND status = 'active'
+       ORDER BY created_at DESC LIMIT 1`,
+      [targetUserId]
+    );
+  }
 
   if (rows.length === 0) {
-    throw new Error(`User ${targetUserId} has no active keys.`);
+    throw new Error(`User ${targetUserId} has no matching key to extend.`);
   }
 
   const key = rows[0];

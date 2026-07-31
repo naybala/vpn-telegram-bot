@@ -69,14 +69,19 @@ async function handlePhoto(ctx) {
     const inlineButtons = [];
 
     if (isRenewal) {
-      inlineButtons.push([
-        Markup.button.callback(`🔄 Thantang Toke (+${PLAN_DAYS} Days)`, `adm_ext_${userId}`)
-      ]);
+      existingKeys.forEach((k) => {
+        const sName = SERVERS[k.server_index]
+          ? SERVERS[k.server_index].name
+          : `Server #${k.server_index + 1}`;
+        inlineButtons.push([
+          Markup.button.callback(`🔄 Extend: ${sName} (+${PLAN_DAYS} Days)`, `adm_ext_${userId}_${k.id}`)
+        ]);
+      });
     }
 
     SERVERS.forEach((server, idx) => {
       inlineButtons.push([
-        Markup.button.callback(`⚡ Key App: ${server.name}`, `adm_gen_${userId}_${idx}`)
+        Markup.button.callback(`⚡ New Key: ${server.name}`, `adm_gen_${userId}_${idx}`)
       ]);
     });
 
