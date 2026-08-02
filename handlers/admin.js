@@ -26,7 +26,7 @@ async function executeGenerateKey({ targetUserId, photoUrl = null, serverIndex =
   const uniqueName = `User_${targetUserId}_${Date.now().toString().slice(-4)}`;
   await client.put(`/access-keys/${key.id}/name`, { name: uniqueName });
   await client.put(`/access-keys/${key.id}/data-limit`, {
-    limit: { bytes: DEFAULT_LIMIT_GB * 1024 ** 3 },
+    limit: { bytes: DEFAULT_LIMIT_GB * 1000 ** 3 },
   });
 
   // 3. DNS Swap (replace raw IP with custom hostname if configured)

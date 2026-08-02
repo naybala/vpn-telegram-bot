@@ -65,7 +65,7 @@ async function handleReissue(ctx) {
     const uniqueName = `User_${targetUserId}_${Date.now().toString().slice(-4)}`;
     await client.put(`/access-keys/${newKey.id}/name`, { name: uniqueName });
     await client.put(`/access-keys/${newKey.id}/data-limit`, {
-      limit: { bytes: DEFAULT_LIMIT_GB * 1024 ** 3 },
+      limit: { bytes: DEFAULT_LIMIT_GB * 1000 ** 3 },
     });
 
     // 4. DNS Hostname Swap

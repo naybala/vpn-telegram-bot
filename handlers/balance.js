@@ -58,9 +58,9 @@ async function handleBalance(ctx) {
         if (keyData) {
           const usedBytes = metricsRes.data.bytesTransferredByUserId[keyId] || 0;
           const limitBytes = keyData.dataLimit ? keyData.dataLimit.bytes : 0;
-          const usedGB = (usedBytes / 1024 ** 3).toFixed(2);
-          const limitGB = (limitBytes / 1024 ** 3).toFixed(2);
-          const leftGB = Math.max(0, (limitBytes - usedBytes) / 1024 ** 3).toFixed(2);
+          const usedGB = (usedBytes / 1000 ** 3).toFixed(2);
+          const limitGB = (limitBytes / 1000 ** 3).toFixed(2);
+          const leftGB = Math.max(0, (limitBytes - usedBytes) / 1000 ** 3).toFixed(2);
 
           let percent = 0;
           if (limitBytes > 0)
