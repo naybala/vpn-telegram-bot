@@ -8,6 +8,7 @@ const ADMIN_ID = Number(process.env.USER_ID);   // Who can run /generate
 const GROUP_ID = Number(process.env.GROUP_ID);   // Where notifications are sent
 const DEFAULT_LIMIT_GB = 100;
 const PLAN_DAYS = Number(process.env.PLAN_DAYS) || 30;  // Subscription duration in days
+const CREDIT_VALUE = Number(process.env.CREDIT_VALUE) || 500; // Ks value per referral credit
 
 // Load Server Lists
 // API_URLS — required, filter blanks
@@ -96,6 +97,7 @@ module.exports = {
   GROUP_ID,
   DEFAULT_LIMIT_GB,
   PLAN_DAYS,
+  CREDIT_VALUE,
   SERVERS,
   BOT_PROXY,
   adminAccount,

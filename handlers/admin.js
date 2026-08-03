@@ -1,6 +1,7 @@
 const { ADMIN_ID, SERVERS, DEFAULT_LIMIT_GB, PLAN_DAYS } = require("../config");
 const { getClient } = require("../bot");
 const db = require("../db");
+const { awardCredit } = require("./referral");
 
 // ==================================================================
 // 🔑 CORE KEY GENERATION LOGIC
@@ -69,6 +70,19 @@ async function executeGenerateKey({ targetUserId, photoUrl = null, serverIndex =
   await telegram.sendMessage(targetUserId, userMessage, {
     parse_mode: "Markdown",
   });
+
+  // 6. Award referral credit if this user was referred
+  try {
+    const [refRows] = await db.execute(
+      "SELECT * FROM referrals WHERE referred_id = ? AND credited = 0",
+      [String(targetUserId)]
+    );
+    if (refRows.length > 0) {
+      await awardCredit(refRows[0].referrer_id, telegram);
+    }
+  } catch (e) {
+    console.warn("⚠️ [Referral] Could not award credit:", e.message);
+  }
 
   return { serverName: selectedServer.name, expiresDisplay, uniqueName };
 }

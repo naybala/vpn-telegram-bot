@@ -1,19 +1,37 @@
 const { Markup } = require("telegraf");
-const { GROUP_ID, SERVERS, PLAN_DAYS } = require("../config");
+const { GROUP_ID, SERVERS, PLAN_DAYS, CREDIT_VALUE } = require("../config");
 const { mainMenu } = require("../menus");
 const db = require("../db");
+const { ensureUser, isFirstTimeBuyer, getReferralInfo } = require("./referral");
+
+// ==================================================================
+// 🗂️ PENDING PAYMENTS STATE MACHINE
+//
+// step values:
+//   'credit_choice'   → waiting for Yes/No inline button on credit usage
+//   'credit_amount'   → waiting for user to type how many credits to use
+//   'referral_code'   → waiting for user to type referral code or SKIP
+//
+// pendingPayments.set(userId, {
+//   photoFileId, isRenewal, existingKeys, username,
+//   step, creditsToUse, userCredits, isFirstTime
+// })
+// ==================================================================
+const pendingPayments = new Map();
 
 // ==================================================================
 // 📸 PAYMENT PHOTO HANDLER
-// Checks if user has an active key (renewal) or is a new customer.
-// Forwards receipt + interactive approval buttons to admin group.
 // ==================================================================
 async function handlePhoto(ctx) {
-  const userId = ctx.from.id;
+  const userId = String(ctx.from.id);
   const username = ctx.from.first_name || "User";
+  const firstName = ctx.from.first_name || null;
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
 
-  // Acknowledge to the user immediately (always, even if admin forwarding fails)
+  // Ensure user row exists (auto-handles existing 50+ users)
+  await ensureUser(userId, firstName).catch(() => {});
+
+  // Acknowledge receipt immediately
   try {
     await ctx.reply(
       `✅ **Receipt ရပြီ!** စစ်ဆေးနေပါသည်...\n\n` +
@@ -24,12 +42,12 @@ async function handlePhoto(ctx) {
     console.warn("⚠️ Could not reply to user:", e.message);
   }
 
-  // Check if user already has an active key
+  // Check existing keys
   let existingKeys = [];
   try {
     const [rows] = await db.execute(
       "SELECT * FROM user_keys WHERE telegram_id = ? AND status = 'active' ORDER BY created_at DESC",
-      [String(userId)]
+      [userId]
     );
     existingKeys = rows;
   } catch (e) {
@@ -37,11 +55,79 @@ async function handlePhoto(ctx) {
   }
 
   const isRenewal = existingKeys.length > 0;
+  const isFirstTime = !isRenewal
+    ? await isFirstTimeBuyer(userId).catch(() => false)
+    : false;
+
+  // Check if user has any credits
+  const refInfo = await getReferralInfo(userId).catch(() => null);
+  const userCredits = refInfo?.credits || 0;
+
+  // Build base state object
+  const baseState = {
+    photoFileId: photo.file_id,
+    isRenewal,
+    existingKeys,
+    username,
+    creditsToUse: 0,
+    userCredits,
+    isFirstTime,
+  };
+
+  // ── Step A: Ask about credit usage if user has credits ──────────
+  if (userCredits > 0) {
+    pendingPayments.set(userId, { ...baseState, step: "credit_choice" });
+
+    return ctx.reply(
+      `💰 **Credit ရှိပါသည်!**\n\n` +
+      `သင့်တွင် **${userCredits} credit(s)** = **${userCredits * CREDIT_VALUE} Ks** ရှိပါသည်။\n\n` +
+      `Credit ကို ဤဝယ်မှုတွင် သုံးမည်လား?`,
+      {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback("✅ ဟုတ်ကဲ့ (Yes)", `credit_yes_${userId}`),
+            Markup.button.callback("❌ မသုံးပါ (No)", `credit_no_${userId}`),
+          ],
+        ]),
+      }
+    );
+  }
+
+  // ── No credits: go straight to referral or forward ───────────────
+  if (isFirstTime) {
+    pendingPayments.set(userId, { ...baseState, step: "referral_code" });
+    return askReferralCode(ctx);
+  }
+
+  await forwardPaymentToAdmin(ctx, { ...baseState, userId });
+}
+
+// ==================================================================
+// 🤝 ASK FOR REFERRAL CODE
+// ==================================================================
+function askReferralCode(ctx) {
+  return ctx.reply(
+    `🤝 **Referral Code ရှိပါသလား?**\n\n` +
+    `မိတ်ဆွေ၏ Referral Code ရှိပါက ရိုက်ထည့်ပါ။\n` +
+    `မရှိပါက SKIP ဟုရိုက်ပါ။\n\n` +
+    `Example: \`USR\\_XXXXXX\``,
+    { parse_mode: "Markdown" }
+  );
+}
+
+// ==================================================================
+// 📤 FORWARD PAYMENT TO ADMIN GROUP
+// ==================================================================
+async function forwardPaymentToAdmin(ctx, { photoFileId, isRenewal, existingKeys, username, userId, creditsToUse = 0 }) {
   const latestKey = existingKeys[0];
 
-  // Build admin group caption
   let caption = `💰 **${isRenewal ? "🔄 RENEWAL" : "🆕 NEW"} Payment**\n`;
   caption += `From: **${username}** (ID: \`${userId}\`)\n`;
+
+  if (creditsToUse > 0) {
+    caption += `🎁 Credits Used: **${creditsToUse}** (= **${creditsToUse * CREDIT_VALUE} Ks** discount)\n`;
+  }
 
   if (isRenewal && latestKey) {
     const serverName = SERVERS[latestKey.server_index]
@@ -58,14 +144,12 @@ async function handlePhoto(ctx) {
     caption += `➕ Extension Plan: **+${PLAN_DAYS} days**`;
   }
 
-  // Forward receipt photo + admin action buttons to admin group
   try {
-    await ctx.telegram.sendPhoto(GROUP_ID, photo.file_id, {
+    await ctx.telegram.sendPhoto(GROUP_ID, photoFileId, {
       caption,
       parse_mode: "Markdown",
     });
 
-    // Build interactive inline action buttons
     const inlineButtons = [];
 
     if (isRenewal) {
@@ -86,6 +170,9 @@ async function handlePhoto(ctx) {
     });
 
     let actionText = `📋 **Action Needed for User \`${userId}\`**\n\n`;
+    if (creditsToUse > 0) {
+      actionText += `🎁 Credit Discount: **${creditsToUse} credits = ${creditsToUse * CREDIT_VALUE} Ks off**\n\n`;
+    }
     actionText += `Click button below to approve instantly:\n\n`;
     actionText += `Manual command (tap to copy):\n`;
     if (isRenewal) {
@@ -100,12 +187,7 @@ async function handlePhoto(ctx) {
     });
   } catch (e) {
     console.error(`❌ Could not forward to admin group (GROUP_ID=${GROUP_ID}): ${e.message}`);
-    console.error(`   → If the group was upgraded to a supergroup, update GROUP_ID in .env`);
   }
 }
 
-module.exports = handlePhoto;
-
-
-module.exports = handlePhoto;
-
+module.exports = { handlePhoto, forwardPaymentToAdmin, pendingPayments, askReferralCode };

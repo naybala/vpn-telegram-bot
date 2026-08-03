@@ -83,8 +83,16 @@ async function run() {
     const filePath = path.join(migrationsDir, file);
     const sql = fs.readFileSync(filePath, "utf8");
 
-    console.log(`🔄 Applying  ${file} ...`);
-    await db.execute(sql);
+    // Split into individual statements (handles multi-statement SQL files)
+    const statements = sql
+      .split(";")
+      .map((s) => s.replace(/--.*$/gm, "").trim()) // strip -- comments
+      .filter((s) => s.length > 0);
+
+    console.log(`🔄 Applying  ${file} (${statements.length} statement(s))...`);
+    for (const stmt of statements) {
+      await db.execute(stmt);
+    }
     await db.execute("INSERT INTO migrations (filename) VALUES (?)", [file]);
     console.log(`✅ Done      ${file}`);
     ranCount++;

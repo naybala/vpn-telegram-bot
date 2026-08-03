@@ -9,9 +9,11 @@ const {
 const { mainMenu } = require("../menus");
 const handleBalance = require("../handlers/balance");
 const handleGetKeys = require("../handlers/getKeys");
-const handlePhoto = require("../handlers/photo");
+const { handlePhoto, forwardPaymentToAdmin, pendingPayments, askReferralCode } = require("../handlers/photo");
 const { handleGenerate, executeGenerateKey } = require("../handlers/admin");
 const { handleExtend, executeExtendKey } = require("../handlers/extend");
+const { ensureUser, validateReferralCode, registerReferral } = require("../handlers/referral");
+const { CREDIT_VALUE } = require("../config");
 
 // ==================================================================
 // 👋 START COMMAND
@@ -321,6 +323,50 @@ bot.action(/^adm_ext_(\d+)(?:_(\d+))?$/, async (ctx) => {
   }
 });
 
+// ==================================================================
+// 💰 CREDIT YES/NO INLINE CALLBACKS
+// ==================================================================
+bot.action(/^credit_yes_(\d+)$/, async (ctx) => {
+  const userId = ctx.match[1];
+  await ctx.answerCbQuery();
+
+  const pending = pendingPayments.get(userId);
+  if (!pending) return ctx.editMessageText("⏰ Session ကုန်သွားပါပြီ။ ပုံကို ပြန်တင်ပါ။");
+
+  // Move to credit_amount step
+  pendingPayments.set(userId, { ...pending, step: "credit_amount" });
+
+  await ctx.editMessageText(
+    `✅ Credit သုံးရန် ရွေးချယ်ပြီးပါပြီ!`,
+    { parse_mode: "Markdown" }
+  );
+
+  return ctx.reply(
+    `💰 **Credit အသုံးပြုမည်:**\n\n` +
+    `သင့်တွင် **${pending.userCredits} credit(s)** = **${pending.userCredits * CREDIT_VALUE} Ks** ရှိသည်။\n\n` +
+    `သုံးလိုသော Credit အရေအတွက် ထည့်ပါ (1 မှ ${pending.userCredits} အထိ):`,
+    { parse_mode: "Markdown" }
+  );
+});
+
+bot.action(/^credit_no_(\d+)$/, async (ctx) => {
+  const userId = ctx.match[1];
+  await ctx.answerCbQuery();
+
+  const pending = pendingPayments.get(userId);
+  if (!pending) return ctx.editMessageText("⏰ Session ကုန်သွားပါပြီ။ ပုံကို ပြန်တင်ပါ။");
+
+  await ctx.editMessageText(`❌ Credit မသုံးပါ — ဆက်လက်လုပ်ဆောင်နေပါသည်...`);
+
+  if (pending.isFirstTime) {
+    pendingPayments.set(userId, { ...pending, step: "referral_code", creditsToUse: 0 });
+    return askReferralCode(ctx);
+  }
+
+  pendingPayments.delete(userId);
+  await forwardPaymentToAdmin(ctx, { ...pending, userId, creditsToUse: 0 });
+});
+
 // Utility: run /chatid inside any group to get its real chat ID for GROUP_ID in .env
 bot.command("chatid", (ctx) => {
   const id = ctx.chat.id;
@@ -331,11 +377,98 @@ bot.command("chatid", (ctx) => {
   });
 });
 
-// Fallback for custom typed text messages
-bot.on("text", (ctx, next) => {
+// ==================================================================
+// 🤝 MULTI-STEP TEXT INPUT HANDLER
+// Handles: credit_amount → referral_code → forward to admin
+// ==================================================================
+bot.on("text", async (ctx, next) => {
   if (ctx.message.text.startsWith("/")) return next();
+
+  const userId = String(ctx.from.id);
+  const firstName = ctx.from.first_name || null;
+
+  if (pendingPayments.has(userId)) {
+    const pending = pendingPayments.get(userId);
+    const input = ctx.message.text.trim();
+
+    // ── Step: credit_amount ─────────────────────────────────────────
+    if (pending.step === "credit_amount") {
+      const amount = parseInt(input, 10);
+
+      if (isNaN(amount) || amount < 1) {
+        return ctx.reply(
+          `❌ မှန်ကန်သော ဂဏန်းထည့်ပါ (1 မှ ${pending.userCredits} အထိ):`
+        );
+      }
+
+      if (amount > pending.userCredits) {
+        return ctx.reply(
+          `❌ **Credit မလုံလောက်ပါ!**\n\n` +
+          `သင့်တွင် **${pending.userCredits} credit(s)** သာ ရှိသည်။\n` +
+          `${pending.userCredits} ထက် မပိုနိုင်ပါ။ ထပ်မံထည့်ပါ:`,
+          { parse_mode: "Markdown" }
+        );
+      }
+
+      // Credit amount valid — save it
+      await ctx.reply(
+        `✅ **${amount} credit(s) = ${amount * CREDIT_VALUE} Ks** discount ကို မှတ်သားပြီးပါပြီ!`,
+        { parse_mode: "Markdown" }
+      );
+
+      if (pending.isFirstTime) {
+        pendingPayments.set(userId, { ...pending, step: "referral_code", creditsToUse: amount });
+        return askReferralCode(ctx);
+      }
+
+      // Not first time → forward directly
+      pendingPayments.delete(userId);
+      await forwardPaymentToAdmin(ctx, { ...pending, userId, creditsToUse: amount });
+      return;
+    }
+
+    // ── Step: referral_code ─────────────────────────────────────────
+    if (pending.step === "referral_code") {
+      const code = input.toUpperCase();
+
+      if (code !== "SKIP") {
+        const result = await validateReferralCode(code, userId);
+
+        if (!result.valid) {
+          const reason =
+            result.reason === "own_code"
+              ? "❌ သင်ကိုယ်တိုင်၏ Code ကို သုံး၍မရပါ။"
+              : result.reason === "already_used"
+              ? "❌ ဤ Code ကို ယခင်ကတည်းက သုံးပြီးဖြစ်သည်။"
+              : "❌ Referral Code မမှန်ပါ။";
+
+          return ctx.reply(
+            `${reason}\n\nCode ထပ်မံထည့်ပါ သို့မဟုတ် SKIP ဟုရိုက်ပါ။`
+          );
+        }
+
+        await registerReferral(result.referrerId, userId, code);
+        await ctx.reply("✅ Referral Code မှတ်တမ်းတင်ပြီးပါပြီ! ကျေးဇူးတင်ပါသည်။");
+      } else {
+        await ctx.reply("👍 Skip ပြုလုပ်ပြီးပါပြီ။ ငွေပေးချေမှု စစ်ဆေးနေပါသည်...");
+      }
+
+      pendingPayments.delete(userId);
+      await forwardPaymentToAdmin(ctx, { ...pending, userId });
+      return;
+    }
+
+    // Unknown step fallback
+    pendingPayments.delete(userId);
+    return;
+  }
+
+  // ── Default: unknown text ───────────────────────────────────────
+  await ensureUser(userId, firstName).catch(() => {});
   ctx.reply(
     "⚠️ **ကျေးဇူးပြု၍ အောက်ပါ Menu Button များကို သာ အသုံးပြုပေးပါ။**",
     mainMenu,
   );
 });
+
+
