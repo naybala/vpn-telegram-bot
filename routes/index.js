@@ -81,19 +81,38 @@ function paymentDetails(server, pm) {
   );
 }
 
-// Helper: get active user count for each server from DB
+// Helper: get active user count directly from Outline API (with DB fallback)
 async function getServerUserCounts() {
   const counts = {};
+
+  // 1. Query live key count from Outline API for each server
+  await Promise.all(
+    SERVERS.map(async (server, index) => {
+      try {
+        const client = getClient(index);
+        const res = await client.get("/access-keys", { timeout: 3000 });
+        const accessKeys = res.data.accessKeys || res.data || [];
+        counts[index] = accessKeys.length;
+      } catch (e) {
+        console.warn(`⚠️ [UserLimit] Could not fetch key count from Outline server index ${index}: ${e.message}`);
+      }
+    })
+  );
+
+  // 2. Fallback / Merge with DB counts if any server failed
   try {
     const [rows] = await db.execute(
       "SELECT server_index, COUNT(*) as count FROM user_keys WHERE status = 'active' GROUP BY server_index"
     );
     rows.forEach((r) => {
-      counts[r.server_index] = r.count;
+      if (counts[r.server_index] === undefined) {
+        counts[r.server_index] = r.count;
+      }
     });
   } catch (e) {
-    console.warn("⚠️ Could not query server user counts:", e.message);
+    console.warn("⚠️ Could not query DB server user counts:", e.message);
   }
+
   return counts;
 }
 
