@@ -4,7 +4,7 @@ const {
   DEFAULT_LIMIT_GB,
   SERVERS,
   PAYMENT_METHODS,
-  adminAccount,
+  GROUP_ID,
 } = require("../config");
 const { mainMenu } = require("../menus");
 const handleBalance = require("../handlers/balance");
@@ -16,20 +16,41 @@ const { handleExtend, executeExtendKey } = require("../handlers/extend");
 // ==================================================================
 // 👋 START COMMAND
 // ==================================================================
-bot.start((ctx) => {
+bot.start(async (ctx) => {
+  const userId = ctx.from.id;
+  const firstName = ctx.from.first_name || "User";
+  const username = ctx.from.username ? `@${ctx.from.username}` : "No username";
+
   let serverListText = "";
   if (SERVERS.length > 0) {
     serverListText = SERVERS.map(
-      (s) => `• **${s.name}**: ${s.price} (${DEFAULT_LIMIT_GB}GB)`,
+      (s) => `• **${s.name}**: ${s.price} (${DEFAULT_LIMIT_GB}GB)`
     ).join("\n");
   }
 
+  // 1. Reply to user
   ctx.replyWithMarkdown(
     `🙏 **Ye Gu Saung VPN မှကြိုဆိုပါတယ်!**\n\n` +
       `⚡ **လက်ရှိရရှိနိုင်သော Server များ:**\n${serverListText}\n\n` +
       `ဝယ်ယူလိုပါက အောက်ပါ **'၀ယ်မည်'** Button ကို နှိပ်ပြီး Server ရွေးချယ်နိုင်ပါသည်။`,
-    mainMenu,
+    mainMenu
   );
+
+  // 2. Announce to Admin Group
+  if (GROUP_ID) {
+    try {
+      await ctx.telegram.sendMessage(
+        GROUP_ID,
+        `🔔 **New Activity Notification**\n\n` +
+          `👤 User: **${firstName}** (${username})\n` +
+          `🆔 User ID: \`${userId}\`\n\n` +
+          `📢 **User is trying to buy our VPN!**`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (e) {
+      console.warn("⚠️ Could not notify admin group on start:", e.message);
+    }
+  }
 });
 
 // ==================================================================
@@ -57,7 +78,27 @@ function paymentDetails(server, pm) {
 }
 
 // Buy — Step 1: Show server list
-bot.hears("၀ယ်မည်", (ctx) => {
+bot.hears("၀ယ်မည်", async (ctx) => {
+  const userId = ctx.from.id;
+  const firstName = ctx.from.first_name || "User";
+  const username = ctx.from.username ? `@${ctx.from.username}` : "No username";
+
+  // Notify Admin Group
+  if (GROUP_ID) {
+    try {
+      await ctx.telegram.sendMessage(
+        GROUP_ID,
+        `🛒 **Buy Button Clicked**\n\n` +
+          `👤 User: **${firstName}** (${username})\n` +
+          `🆔 User ID: \`${userId}\`\n\n` +
+          `📢 **User clicked "၀ယ်မည်" to view plans and buy VPN!**`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (e) {
+      console.warn("⚠️ Could not notify admin group on '၀ယ်မည်':", e.message);
+    }
+  }
+
   if (SERVERS.length === 0) {
     return ctx.reply("❌ ရရှိနိုင်သော Server မရှိသေးပါ။");
   }
