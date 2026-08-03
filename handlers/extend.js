@@ -1,10 +1,12 @@
-const { ADMIN_ID, PLAN_DAYS, SERVERS } = require("../config");
+const { ADMIN_ID, PLAN_DAYS, SERVERS, DEFAULT_LIMIT_GB } = require("../config");
+const { getClient } = require("../bot");
 const db = require("../db");
+const { deductCredits } = require("./referral");
 
 // ==================================================================
 // 🔄 CORE EXTEND LOGIC
 // ==================================================================
-async function executeExtendKey({ targetUserId, keyDbId = null, daysToAdd = PLAN_DAYS, telegram }) {
+async function executeExtendKey({ targetUserId, keyDbId = null, daysToAdd = PLAN_DAYS, creditsToUse = 0, telegram }) {
   let rows = [];
   if (keyDbId) {
     [rows] = await db.execute(
@@ -25,10 +27,33 @@ async function executeExtendKey({ targetUserId, keyDbId = null, daysToAdd = PLAN
   }
 
   const key = rows[0];
-  const serverName = SERVERS[key.server_index]
-    ? SERVERS[key.server_index].name
-    : `Server #${key.server_index + 1}`;
+  const serverIndex = key.server_index;
+  const serverName = SERVERS[serverIndex]
+    ? SERVERS[serverIndex].name
+    : `Server #${serverIndex + 1}`;
 
+  // ── Update Outline API Data Limit (+100GB / DEFAULT_LIMIT_GB) ──────
+  const addedBytes = DEFAULT_LIMIT_GB * 1000 ** 3;
+  let newLimitGb = DEFAULT_LIMIT_GB * 2;
+
+  try {
+    const client = getClient(serverIndex);
+    const keysRes = await client.get("/access-keys");
+    const accessKeys = keysRes.data.accessKeys || keysRes.data || [];
+    const outlineKey = accessKeys.find((k) => String(k.id) === String(key.key_id));
+
+    const currentBytes = outlineKey?.dataLimit?.bytes || DEFAULT_LIMIT_GB * 1000 ** 3;
+    const newBytes = currentBytes + addedBytes;
+    newLimitGb = Math.round(newBytes / (1000 ** 3));
+
+    await client.put(`/access-keys/${key.key_id}/data-limit`, {
+      limit: { bytes: newBytes },
+    });
+  } catch (e) {
+    console.warn(`⚠️ Could not update data limit on Outline server: ${e.message}`);
+  }
+
+  // ── Update Expiry Date ───────────────────────────────────────────
   const baseDate = key.expires_at && new Date(key.expires_at) > new Date()
     ? new Date(key.expires_at)
     : new Date();
@@ -48,7 +73,8 @@ async function executeExtendKey({ targetUserId, keyDbId = null, daysToAdd = PLAN
   const userMessage =
     `✅ **Plan သက်တမ်းတိုးပြီးပါပြီ!**\n\n` +
     `🌐 Server: **${serverName}**\n` +
-    `➕ Extended by: **${daysToAdd} days**\n` +
+    `➕ Extended by: **+${DEFAULT_LIMIT_GB} GB / +${daysToAdd} days**\n` +
+    `📊 Total Data Limit: **${newLimitGb} GB**\n` +
     `📅 New Expiry: **${newExpiryDisplay}**\n\n` +
     `ဆက်လက်အသုံးပြုနိုင်ပါပြီ။ Key တူသည်ဖြစ်သောကြောင့် ပြောင်းရန်မလိုပါ။`;
 
@@ -56,7 +82,14 @@ async function executeExtendKey({ targetUserId, keyDbId = null, daysToAdd = PLAN
     parse_mode: "Markdown",
   });
 
-  return { serverName, newExpiryDisplay, daysToAdd };
+  // Deduct used credits if any
+  if (creditsToUse > 0) {
+    await deductCredits(targetUserId, creditsToUse).catch((e) =>
+      console.warn("⚠️ [Referral] Could not deduct credits:", e.message)
+    );
+  }
+
+  return { serverName, newExpiryDisplay, daysToAdd, newLimitGb };
 }
 
 // ==================================================================

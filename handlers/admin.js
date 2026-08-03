@@ -1,12 +1,12 @@
 const { ADMIN_ID, SERVERS, DEFAULT_LIMIT_GB, PLAN_DAYS } = require("../config");
 const { getClient } = require("../bot");
 const db = require("../db");
-const { awardCredit } = require("./referral");
+const { awardCredit, deductCredits } = require("./referral");
 
 // ==================================================================
 // 🔑 CORE KEY GENERATION LOGIC
 // ==================================================================
-async function executeGenerateKey({ targetUserId, photoUrl = null, serverIndex = 0, telegram }) {
+async function executeGenerateKey({ targetUserId, photoUrl = null, serverIndex = 0, creditsToUse = 0, telegram }) {
   const selectedServer = SERVERS[serverIndex];
   if (!selectedServer) throw new Error(`Invalid server index: ${serverIndex}`);
 
@@ -71,7 +71,14 @@ async function executeGenerateKey({ targetUserId, photoUrl = null, serverIndex =
     parse_mode: "Markdown",
   });
 
-  // 6. Award referral credit if this user was referred
+  // 6. Deduct used credits if any
+  if (creditsToUse > 0) {
+    await deductCredits(targetUserId, creditsToUse).catch((e) =>
+      console.warn("⚠️ [Referral] Could not deduct credits:", e.message)
+    );
+  }
+
+  // 7. Award referral credit if this user was referred
   try {
     const [refRows] = await db.execute(
       "SELECT * FROM referrals WHERE referred_id = ? AND credited = 0",

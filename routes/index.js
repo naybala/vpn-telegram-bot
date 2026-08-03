@@ -9,10 +9,10 @@ const {
 const { mainMenu } = require("../menus");
 const handleBalance = require("../handlers/balance");
 const handleGetKeys = require("../handlers/getKeys");
-const { handlePhoto, forwardPaymentToAdmin, pendingPayments, askReferralCode } = require("../handlers/photo");
+const { handlePhoto, forwardPaymentToAdmin, pendingPayments, userCreditState, askReferralCode } = require("../handlers/photo");
 const { handleGenerate, executeGenerateKey } = require("../handlers/admin");
 const { handleExtend, executeExtendKey } = require("../handlers/extend");
-const { ensureUser, validateReferralCode, registerReferral } = require("../handlers/referral");
+const { ensureUser, validateReferralCode, registerReferral, getReferralInfo } = require("../handlers/referral");
 const { CREDIT_VALUE } = require("../config");
 
 // ==================================================================
@@ -173,8 +173,8 @@ bot.action(/^select_server_(\d+)$/, (ctx) => {
   );
 });
 
-// Buy — Step 3: Payment method selected → show payment details
-bot.action(/^pay_([a-z]+)_(\d+)$/, (ctx) => {
+// Buy — Step 3: Payment method selected → show payment details & check credit
+bot.action(/^pay_([a-z]+)_(\d+)$/, async (ctx) => {
   const pmKey = ctx.match[1];
   const serverId = parseInt(ctx.match[2], 10);
 
@@ -184,7 +184,38 @@ bot.action(/^pay_([a-z]+)_(\d+)$/, (ctx) => {
   if (!server || !pm) return ctx.answerCbQuery("❌ Invalid selection");
 
   ctx.answerCbQuery();
-  ctx.reply(paymentDetails(server, pm), { parse_mode: "Markdown" });
+  await ctx.reply(paymentDetails(server, pm), { parse_mode: "Markdown" });
+
+  // Right after showing payment details, check if user has credits
+  const userId = String(ctx.from.id);
+  const refInfo = await getReferralInfo(userId).catch(() => null);
+  const userCredits = refInfo?.credits || 0;
+
+  if (userCredits > 0) {
+    userCreditState.set(userId, {
+      userCredits,
+      creditsToUse: 0,
+      serverPrice: server.price,
+      step: "credit_choice",
+    });
+
+    await ctx.reply(
+      `💰 **Credit ရှိပါသည်!**\n\n` +
+        `သင့်တွင် **${userCredits} credit(s)** = **${userCredits * CREDIT_VALUE} Ks** ရှိပါသည်။\n\n` +
+        `Credit ကို ဤဝယ်ယူမှုတွင် သုံးမည်လား?`,
+      {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([
+          [
+            Markup.button.callback("✅ ဟုတ်ကဲ့ (Yes)", `credit_yes_${userId}`),
+            Markup.button.callback("❌ မသုံးပါ (No)", `credit_no_${userId}`),
+          ],
+        ]),
+      },
+    );
+  } else {
+    await ctx.reply("📸 ငွေလွှဲပြီးပါက ပေးချေမှု Receipt (Screenshot) ပေးပို့ပေးပါ 🙏");
+  }
 });
 
 // Contact
@@ -267,9 +298,10 @@ bot.command("reissue", handleReissue); // /reissue <userId>
 bot.command("deletekey", handleAdminDeleteKey); // /deletekey <userId>
 
 // Admin Inline Action: Generate key
-bot.action(/^adm_gen_(\d+)_(\d+)$/, async (ctx) => {
+bot.action(/^adm_gen_(\d+)_(\d+)(?:_(\d+))?$/, async (ctx) => {
   const targetUserId = ctx.match[1];
   const serverIndex = parseInt(ctx.match[2], 10);
+  const creditsToUse = ctx.match[3] ? parseInt(ctx.match[3], 10) : 0;
   const adminName = ctx.from.first_name || "Admin";
 
   try {
@@ -277,27 +309,33 @@ bot.action(/^adm_gen_(\d+)_(\d+)$/, async (ctx) => {
     const res = await executeGenerateKey({
       targetUserId,
       serverIndex,
+      creditsToUse,
       telegram: ctx.telegram,
     });
 
     const originalText = ctx.callbackQuery.message.text || "";
-    await ctx.editMessageText(
+    let approvedMsg =
       `${originalText}\n\n` +
-        `✅ **Approved & Key Generated!**\n` +
-        `👤 User: \`${targetUserId}\`\n` +
-        `🌐 Server: **${res.serverName}** (Expires ${res.expiresDisplay})\n` +
-        `👮 Approved by: **${adminName}**`,
-      { parse_mode: "Markdown" },
-    );
+      `✅ **Approved & Key Generated!**\n` +
+      `👤 User: \`${targetUserId}\`\n` +
+      `🌐 Server: **${res.serverName}** (Expires ${res.expiresDisplay})\n`;
+
+    if (creditsToUse > 0) {
+      approvedMsg += `🎁 Credits Deducted: **${creditsToUse}**\n`;
+    }
+    approvedMsg += `👮 Approved by: **${adminName}**`;
+
+    await ctx.editMessageText(approvedMsg, { parse_mode: "Markdown" });
   } catch (e) {
     ctx.reply(`❌ Key generation error: ${e.message}`);
   }
 });
 
 // Admin Inline Action: Extend plan
-bot.action(/^adm_ext_(\d+)(?:_(\d+))?$/, async (ctx) => {
+bot.action(/^adm_ext_(\d+)(?:_(\d+))?(?:_(\d+))?$/, async (ctx) => {
   const targetUserId = ctx.match[1];
   const keyDbId = ctx.match[2] ? parseInt(ctx.match[2], 10) : null;
+  const creditsToUse = ctx.match[3] ? parseInt(ctx.match[3], 10) : 0;
   const adminName = ctx.from.first_name || "Admin";
 
   try {
@@ -305,19 +343,24 @@ bot.action(/^adm_ext_(\d+)(?:_(\d+))?$/, async (ctx) => {
     const res = await executeExtendKey({
       targetUserId,
       keyDbId,
+      creditsToUse,
       telegram: ctx.telegram,
     });
 
     const originalText = ctx.callbackQuery.message.text || "";
-    await ctx.editMessageText(
+    let approvedMsg =
       `${originalText}\n\n` +
-        `✅ **Plan Extended!**\n` +
-        `👤 User: \`${targetUserId}\` (+${res.daysToAdd} days)\n` +
-        `🌐 Server: **${res.serverName}**\n` +
-        `📅 New Expiry: **${res.newExpiryDisplay}**\n` +
-        `👮 Approved by: **${adminName}**`,
-      { parse_mode: "Markdown" },
-    );
+      `✅ **Plan Extended!**\n` +
+      `👤 User: \`${targetUserId}\` (+${res.daysToAdd} days)\n` +
+      `🌐 Server: **${res.serverName}**\n` +
+      `📅 New Expiry: **${res.newExpiryDisplay}**\n`;
+
+    if (creditsToUse > 0) {
+      approvedMsg += `🎁 Credits Deducted: **${creditsToUse}**\n`;
+    }
+    approvedMsg += `👮 Approved by: **${adminName}**`;
+
+    await ctx.editMessageText(approvedMsg, { parse_mode: "Markdown" });
   } catch (e) {
     ctx.reply(`❌ Extension error: ${e.message}`);
   }
@@ -330,22 +373,18 @@ bot.action(/^credit_yes_(\d+)$/, async (ctx) => {
   const userId = ctx.match[1];
   await ctx.answerCbQuery();
 
-  const pending = pendingPayments.get(userId);
-  if (!pending) return ctx.editMessageText("⏰ Session ကုန်သွားပါပြီ။ ပုံကို ပြန်တင်ပါ။");
+  const state = userCreditState.get(userId);
+  if (!state) return ctx.editMessageText("⏰ Session ကုန်သွားပါပြီ။ Payment Method ကို ပြန်လည်ရွေးချယ်ပါ။");
 
-  // Move to credit_amount step
-  pendingPayments.set(userId, { ...pending, step: "credit_amount" });
+  userCreditState.set(userId, { ...state, step: "credit_amount" });
 
-  await ctx.editMessageText(
-    `✅ Credit သုံးရန် ရွေးချယ်ပြီးပါပြီ!`,
-    { parse_mode: "Markdown" }
-  );
+  await ctx.editMessageText(`✅ Credit သုံးရန် ရွေးချယ်ပြီးပါပြီ!`, { parse_mode: "Markdown" });
 
   return ctx.reply(
     `💰 **Credit အသုံးပြုမည်:**\n\n` +
-    `သင့်တွင် **${pending.userCredits} credit(s)** = **${pending.userCredits * CREDIT_VALUE} Ks** ရှိသည်။\n\n` +
-    `သုံးလိုသော Credit အရေအတွက် ထည့်ပါ (1 မှ ${pending.userCredits} အထိ):`,
-    { parse_mode: "Markdown" }
+      `သင့်တွင် **${state.userCredits} credit(s)** = **${state.userCredits * CREDIT_VALUE} Ks** ရှိသည်။\n\n` +
+      `သုံးလိုသော Credit အရေအတွက် ထည့်ပါ (1 မှ ${state.userCredits} အထိ):`,
+    { parse_mode: "Markdown" },
   );
 });
 
@@ -353,18 +392,13 @@ bot.action(/^credit_no_(\d+)$/, async (ctx) => {
   const userId = ctx.match[1];
   await ctx.answerCbQuery();
 
-  const pending = pendingPayments.get(userId);
-  if (!pending) return ctx.editMessageText("⏰ Session ကုန်သွားပါပြီ။ ပုံကို ပြန်တင်ပါ။");
-
-  await ctx.editMessageText(`❌ Credit မသုံးပါ — ဆက်လက်လုပ်ဆောင်နေပါသည်...`);
-
-  if (pending.isFirstTime) {
-    pendingPayments.set(userId, { ...pending, step: "referral_code", creditsToUse: 0 });
-    return askReferralCode(ctx);
+  const state = userCreditState.get(userId);
+  if (state) {
+    userCreditState.set(userId, { ...state, creditsToUse: 0, step: "done" });
   }
 
-  pendingPayments.delete(userId);
-  await forwardPaymentToAdmin(ctx, { ...pending, userId, creditsToUse: 0 });
+  await ctx.editMessageText(`❌ Credit မသုံးပါ`);
+  return ctx.reply("📸 ငွေလွှဲပြီးပါက ပေးချေမှု Receipt (Screenshot) ပေးပို့ပေးပါ 🙏");
 });
 
 // Utility: run /chatid inside any group to get its real chat ID for GROUP_ID in .env
@@ -379,55 +413,60 @@ bot.command("chatid", (ctx) => {
 
 // ==================================================================
 // 🤝 MULTI-STEP TEXT INPUT HANDLER
-// Handles: credit_amount → referral_code → forward to admin
+// Handles: credit_amount (before photo) & referral_code (after photo)
 // ==================================================================
 bot.on("text", async (ctx, next) => {
   if (ctx.message.text.startsWith("/")) return next();
 
   const userId = String(ctx.from.id);
   const firstName = ctx.from.first_name || null;
+  const input = ctx.message.text.trim();
 
-  if (pendingPayments.has(userId)) {
-    const pending = pendingPayments.get(userId);
-    const input = ctx.message.text.trim();
-
-    // ── Step: credit_amount ─────────────────────────────────────────
-    if (pending.step === "credit_amount") {
+  // ── Step 1: Pre-photo Credit Amount input ─────────────────────
+  if (userCreditState.has(userId)) {
+    const state = userCreditState.get(userId);
+    if (state.step === "credit_amount") {
       const amount = parseInt(input, 10);
 
       if (isNaN(amount) || amount < 1) {
-        return ctx.reply(
-          `❌ မှန်ကန်သော ဂဏန်းထည့်ပါ (1 မှ ${pending.userCredits} အထိ):`
-        );
+        return ctx.reply(`❌ မှန်ကန်သော ဂဏန်းထည့်ပါ (1 မှ ${state.userCredits} အထိ):`);
       }
 
-      if (amount > pending.userCredits) {
+      if (amount > state.userCredits) {
         return ctx.reply(
           `❌ **Credit မလုံလောက်ပါ!**\n\n` +
-          `သင့်တွင် **${pending.userCredits} credit(s)** သာ ရှိသည်။\n` +
-          `${pending.userCredits} ထက် မပိုနိုင်ပါ။ ထပ်မံထည့်ပါ:`,
-          { parse_mode: "Markdown" }
+            `သင့်တွင် **${state.userCredits} credit(s)** သာ ရှိသည်။\n` +
+            `${state.userCredits} ထက် မပိုနိုင်ပါ။ ထပ်မံထည့်ပါ:`,
+          { parse_mode: "Markdown" },
         );
       }
 
-      // Credit amount valid — save it
+      userCreditState.set(userId, { ...state, creditsToUse: amount, step: "done" });
+
+      const origPriceNum = parseInt((state.serverPrice || "7000").replace(/[^\d]/g, ""), 10) || 7000;
+      const discountNum = amount * CREDIT_VALUE;
+      const finalPriceNum = Math.max(0, origPriceNum - discountNum);
+
+      const origStr = origPriceNum.toLocaleString();
+      const discStr = discountNum.toLocaleString();
+      const finalStr = finalPriceNum.toLocaleString();
+
       await ctx.reply(
-        `✅ **${amount} credit(s) = ${amount * CREDIT_VALUE} Ks** discount ကို မှတ်သားပြီးပါပြီ!`,
-        { parse_mode: "Markdown" }
+        `✅ **${amount} credit(s)** (-${discStr} Ks) discount ကို မှတ်သားပြီးပါပြီ!\n\n` +
+          `💰 မူလဈေးနှုန်း: **${origStr} Ks**\n` +
+          `🎁 Credit Discount: **-${discStr} Ks**\n` +
+          `💵 **ကျန်ရှိ ပေးချေရမည့်ပမာဏ: ${finalStr} Ks**\n\n` +
+          `📸 **${finalStr} Ks** ငွေလွှဲပြီးပါက Receipt (Screenshot) ပေးပို့ပေးပါ 🙏`,
+        { parse_mode: "Markdown" },
       );
-
-      if (pending.isFirstTime) {
-        pendingPayments.set(userId, { ...pending, step: "referral_code", creditsToUse: amount });
-        return askReferralCode(ctx);
-      }
-
-      // Not first time → forward directly
-      pendingPayments.delete(userId);
-      await forwardPaymentToAdmin(ctx, { ...pending, userId, creditsToUse: amount });
       return;
     }
+  }
 
-    // ── Step: referral_code ─────────────────────────────────────────
+  // ── Step 2: Post-photo Referral Code input ───────────────────
+  if (pendingPayments.has(userId)) {
+    const pending = pendingPayments.get(userId);
+
     if (pending.step === "referral_code") {
       const code = input.toUpperCase();
 
@@ -442,9 +481,7 @@ bot.on("text", async (ctx, next) => {
               ? "❌ ဤ Code ကို ယခင်ကတည်းက သုံးပြီးဖြစ်သည်။"
               : "❌ Referral Code မမှန်ပါ။";
 
-          return ctx.reply(
-            `${reason}\n\nCode ထပ်မံထည့်ပါ သို့မဟုတ် SKIP ဟုရိုက်ပါ။`
-          );
+          return ctx.reply(`${reason}\n\nCode ထပ်မံထည့်ပါ သို့မဟုတ် SKIP ဟုရိုက်ပါ။`);
         }
 
         await registerReferral(result.referrerId, userId, code);
@@ -458,12 +495,11 @@ bot.on("text", async (ctx, next) => {
       return;
     }
 
-    // Unknown step fallback
     pendingPayments.delete(userId);
     return;
   }
 
-  // ── Default: unknown text ───────────────────────────────────────
+  // ── Default fallback for custom typed text ────────────────────
   await ensureUser(userId, firstName).catch(() => {});
   ctx.reply(
     "⚠️ **ကျေးဇူးပြု၍ အောက်ပါ Menu Button များကို သာ အသုံးပြုပေးပါ။**",

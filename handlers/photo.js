@@ -2,21 +2,17 @@ const { Markup } = require("telegraf");
 const { GROUP_ID, SERVERS, PLAN_DAYS, CREDIT_VALUE } = require("../config");
 const { mainMenu } = require("../menus");
 const db = require("../db");
-const { ensureUser, isFirstTimeBuyer, getReferralInfo } = require("./referral");
+const { ensureUser, isFirstTimeBuyer } = require("./referral");
 
 // ==================================================================
-// 🗂️ PENDING PAYMENTS STATE MACHINE
+// 🗂️ STATE STORES
+// userCreditState → tracks pre-screenshot credit selection per user:
+//   userId → { userCredits, creditsToUse, step: 'credit_choice' | 'credit_amount' | 'done' }
 //
-// step values:
-//   'credit_choice'   → waiting for Yes/No inline button on credit usage
-//   'credit_amount'   → waiting for user to type how many credits to use
-//   'referral_code'   → waiting for user to type referral code or SKIP
-//
-// pendingPayments.set(userId, {
-//   photoFileId, isRenewal, existingKeys, username,
-//   step, creditsToUse, userCredits, isFirstTime
-// })
+// pendingPayments → tracks post-screenshot referral code input per user:
+//   userId → { photoFileId, isRenewal, existingKeys, username, creditsToUse, step: 'referral_code' }
 // ==================================================================
+const userCreditState = new Map();
 const pendingPayments = new Map();
 
 // ==================================================================
@@ -27,6 +23,11 @@ async function handlePhoto(ctx) {
   const username = ctx.from.first_name || "User";
   const firstName = ctx.from.first_name || null;
   const photo = ctx.message.photo[ctx.message.photo.length - 1];
+
+  // Retrieve pre-selected creditsToUse if user chose any during payment method step
+  const userCred = userCreditState.get(userId);
+  const creditsToUse = userCred?.creditsToUse || 0;
+  userCreditState.delete(userId); // consume state
 
   // Ensure user row exists (auto-handles existing 50+ users)
   await ensureUser(userId, firstName).catch(() => {});
@@ -59,48 +60,24 @@ async function handlePhoto(ctx) {
     ? await isFirstTimeBuyer(userId).catch(() => false)
     : false;
 
-  // Check if user has any credits
-  const refInfo = await getReferralInfo(userId).catch(() => null);
-  const userCredits = refInfo?.credits || 0;
-
-  // Build base state object
-  const baseState = {
+  // Build base payload for admin notification
+  const payload = {
     photoFileId: photo.file_id,
     isRenewal,
     existingKeys,
     username,
-    creditsToUse: 0,
-    userCredits,
-    isFirstTime,
+    userId,
+    creditsToUse,
   };
 
-  // ── Step A: Ask about credit usage if user has credits ──────────
-  if (userCredits > 0) {
-    pendingPayments.set(userId, { ...baseState, step: "credit_choice" });
-
-    return ctx.reply(
-      `💰 **Credit ရှိပါသည်!**\n\n` +
-      `သင့်တွင် **${userCredits} credit(s)** = **${userCredits * CREDIT_VALUE} Ks** ရှိပါသည်။\n\n` +
-      `Credit ကို ဤဝယ်မှုတွင် သုံးမည်လား?`,
-      {
-        parse_mode: "Markdown",
-        ...Markup.inlineKeyboard([
-          [
-            Markup.button.callback("✅ ဟုတ်ကဲ့ (Yes)", `credit_yes_${userId}`),
-            Markup.button.callback("❌ မသုံးပါ (No)", `credit_no_${userId}`),
-          ],
-        ]),
-      }
-    );
-  }
-
-  // ── No credits: go straight to referral or forward ───────────────
+  // ── First-time buyer: ask for referral code before forwarding ──
   if (isFirstTime) {
-    pendingPayments.set(userId, { ...baseState, step: "referral_code" });
+    pendingPayments.set(userId, { ...payload, step: "referral_code" });
     return askReferralCode(ctx);
   }
 
-  await forwardPaymentToAdmin(ctx, { ...baseState, userId });
+  // ── Renewal or returning user: forward directly ─────────────────
+  await forwardPaymentToAdmin(ctx, payload);
 }
 
 // ==================================================================
@@ -157,15 +134,21 @@ async function forwardPaymentToAdmin(ctx, { photoFileId, isRenewal, existingKeys
         const sName = SERVERS[k.server_index]
           ? SERVERS[k.server_index].name
           : `Server #${k.server_index + 1}`;
+        const cbData = creditsToUse > 0
+          ? `adm_ext_${userId}_${k.id}_${creditsToUse}`
+          : `adm_ext_${userId}_${k.id}`;
         inlineButtons.push([
-          Markup.button.callback(`🔄 Extend: ${sName} (+${PLAN_DAYS} Days)`, `adm_ext_${userId}_${k.id}`)
+          Markup.button.callback(`🔄 Extend: ${sName} (+${PLAN_DAYS} Days)`, cbData)
         ]);
       });
     }
 
     SERVERS.forEach((server, idx) => {
+      const cbData = creditsToUse > 0
+        ? `adm_gen_${userId}_${idx}_${creditsToUse}`
+        : `adm_gen_${userId}_${idx}`;
       inlineButtons.push([
-        Markup.button.callback(`⚡ New Key: ${server.name}`, `adm_gen_${userId}_${idx}`)
+        Markup.button.callback(`⚡ New Key: ${server.name}`, cbData)
       ]);
     });
 
@@ -190,4 +173,10 @@ async function forwardPaymentToAdmin(ctx, { photoFileId, isRenewal, existingKeys
   }
 }
 
-module.exports = { handlePhoto, forwardPaymentToAdmin, pendingPayments, askReferralCode };
+module.exports = {
+  handlePhoto,
+  forwardPaymentToAdmin,
+  pendingPayments,
+  userCreditState,
+  askReferralCode,
+};

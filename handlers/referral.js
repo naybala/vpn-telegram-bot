@@ -142,11 +142,22 @@ async function isFirstTimeBuyer(telegramId) {
   return refRows.length === 0; // true only if never been referred
 }
 
+// ── Deduct credits used by user ───────────────────────────────────
+async function deductCredits(telegramId, amount) {
+  if (!amount || amount <= 0) return;
+  const id = String(telegramId);
+  await db.execute(
+    "UPDATE users SET credits = GREATEST(0, credits - ?) WHERE telegram_id = ?",
+    [amount, id]
+  );
+}
+
 module.exports = {
   ensureUser,
   getReferralInfo,
   validateReferralCode,
   registerReferral,
   awardCredit,
+  deductCredits,
   isFirstTimeBuyer,
 };
