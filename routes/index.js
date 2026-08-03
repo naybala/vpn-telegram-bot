@@ -24,7 +24,7 @@ bot.start(async (ctx) => {
   let serverListText = "";
   if (SERVERS.length > 0) {
     serverListText = SERVERS.map(
-      (s) => `• **${s.name}**: ${s.price} (${DEFAULT_LIMIT_GB}GB)`
+      (s) => `• **${s.name}**: ${s.price} (${DEFAULT_LIMIT_GB}GB)`,
     ).join("\n");
   }
 
@@ -33,7 +33,7 @@ bot.start(async (ctx) => {
     `🙏 **Ye Gu Saung VPN မှကြိုဆိုပါတယ်!**\n\n` +
       `⚡ **လက်ရှိရရှိနိုင်သော Server များ:**\n${serverListText}\n\n` +
       `ဝယ်ယူလိုပါက အောက်ပါ **'၀ယ်မည်'** Button ကို နှိပ်ပြီး Server ရွေးချယ်နိုင်ပါသည်။`,
-    mainMenu
+    mainMenu,
   );
 
   // 2. Announce to Admin Group
@@ -45,7 +45,7 @@ bot.start(async (ctx) => {
           `👤 User: **${firstName}** (${username})\n` +
           `🆔 User ID: \`${userId}\`\n\n` +
           `📢 **User is trying to buy our VPN!**`,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
     } catch (e) {
       console.warn("⚠️ Could not notify admin group on start:", e.message);
@@ -92,7 +92,7 @@ bot.hears("၀ယ်မည်", async (ctx) => {
           `👤 User: **${firstName}** (${username})\n` +
           `🆔 User ID: \`${userId}\`\n\n` +
           `📢 **User clicked "၀ယ်မည်" to view plans and buy VPN!**`,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
     } catch (e) {
       console.warn("⚠️ Could not notify admin group on '၀ယ်မည်':", e.message);
@@ -173,11 +173,11 @@ bot.action(/^select_server_(\d+)$/, (ctx) => {
 
 // Buy — Step 3: Payment method selected → show payment details
 bot.action(/^pay_([a-z]+)_(\d+)$/, (ctx) => {
-  const pmKey    = ctx.match[1];
+  const pmKey = ctx.match[1];
   const serverId = parseInt(ctx.match[2], 10);
 
   const server = SERVERS[serverId];
-  const pm     = PAYMENT_METHODS.find((m) => m.key === pmKey);
+  const pm = PAYMENT_METHODS.find((m) => m.key === pmKey);
 
   if (!server || !pm) return ctx.answerCbQuery("❌ Invalid selection");
 
@@ -212,11 +212,41 @@ bot.action("cancel_delete_key", (ctx) => {
 });
 
 // How to use (instructions image)
-bot.hears("အသုံးပြုပုံ", (ctx) => {
-  ctx.reply(`📖 **VPN အသုံးပြုနည်း**\n`);
-  try {
-    ctx.replyWithPhoto(Input.fromLocalFile("images/instruction.jpeg"));
-  } catch (e) {}
+bot.hears("လမ်းညွှန်ချက်များ", async (ctx) => {
+  const fs = require("fs");
+
+  // VPN Buy steps
+  const buyImages = ["images/combine.jpeg"];
+
+  const existingBuyImages = buyImages.filter((f) => fs.existsSync(f));
+
+  if (existingBuyImages.length > 0) {
+    await ctx.reply(`📖 **VPN ဝယ်နည်း**`, { parse_mode: "Markdown" });
+    for (const imgPath of existingBuyImages) {
+      try {
+        await ctx.replyWithPhoto(Input.fromLocalFile(imgPath));
+      } catch (e) {
+        console.warn(`⚠️ Could not send image ${imgPath}:`, e.message);
+      }
+    }
+  }
+
+  // VPN usage instruction
+  if (fs.existsSync("images/instruction.jpeg")) {
+    await ctx.reply(`📖 **VPN အသုံးပြုနည်း**`, { parse_mode: "Markdown" });
+    try {
+      await ctx.replyWithPhoto(Input.fromLocalFile("images/instruction.jpeg"));
+    } catch (e) {
+      console.warn("⚠️ Could not send instruction image:", e.message);
+    }
+  }
+
+  if (
+    existingBuyImages.length === 0 &&
+    !fs.existsSync("images/instruction.jpeg")
+  ) {
+    ctx.reply("⚠️ လမ်းညွှန်ပုံများ မတွေ့ပါ။ Admin ထံ ဆက်သွယ်ပါ။");
+  }
 });
 
 // ==================================================================
@@ -229,9 +259,9 @@ const handleReissue = require("../handlers/reissue");
 // ==================================================================
 // 👮 ADMIN COMMANDS & ACTIONS
 // ==================================================================
-bot.command("generate", handleGenerate);  // /generate <userId> [photoId] [serverIdx]
-bot.command("extend", handleExtend);      // /extend <userId> [days]
-bot.command("reissue", handleReissue);    // /reissue <userId>
+bot.command("generate", handleGenerate); // /generate <userId> [photoId] [serverIdx]
+bot.command("extend", handleExtend); // /extend <userId> [days]
+bot.command("reissue", handleReissue); // /reissue <userId>
 bot.command("deletekey", handleAdminDeleteKey); // /deletekey <userId>
 
 // Admin Inline Action: Generate key
@@ -251,11 +281,11 @@ bot.action(/^adm_gen_(\d+)_(\d+)$/, async (ctx) => {
     const originalText = ctx.callbackQuery.message.text || "";
     await ctx.editMessageText(
       `${originalText}\n\n` +
-      `✅ **Approved & Key Generated!**\n` +
-      `👤 User: \`${targetUserId}\`\n` +
-      `🌐 Server: **${res.serverName}** (Expires ${res.expiresDisplay})\n` +
-      `👮 Approved by: **${adminName}**`,
-      { parse_mode: "Markdown" }
+        `✅ **Approved & Key Generated!**\n` +
+        `👤 User: \`${targetUserId}\`\n` +
+        `🌐 Server: **${res.serverName}** (Expires ${res.expiresDisplay})\n` +
+        `👮 Approved by: **${adminName}**`,
+      { parse_mode: "Markdown" },
     );
   } catch (e) {
     ctx.reply(`❌ Key generation error: ${e.message}`);
@@ -279,12 +309,12 @@ bot.action(/^adm_ext_(\d+)(?:_(\d+))?$/, async (ctx) => {
     const originalText = ctx.callbackQuery.message.text || "";
     await ctx.editMessageText(
       `${originalText}\n\n` +
-      `✅ **Plan Extended!**\n` +
-      `👤 User: \`${targetUserId}\` (+${res.daysToAdd} days)\n` +
-      `🌐 Server: **${res.serverName}**\n` +
-      `📅 New Expiry: **${res.newExpiryDisplay}**\n` +
-      `👮 Approved by: **${adminName}**`,
-      { parse_mode: "Markdown" }
+        `✅ **Plan Extended!**\n` +
+        `👤 User: \`${targetUserId}\` (+${res.daysToAdd} days)\n` +
+        `🌐 Server: **${res.serverName}**\n` +
+        `📅 New Expiry: **${res.newExpiryDisplay}**\n` +
+        `👮 Approved by: **${adminName}**`,
+      { parse_mode: "Markdown" },
     );
   } catch (e) {
     ctx.reply(`❌ Extension error: ${e.message}`);
@@ -293,14 +323,19 @@ bot.action(/^adm_ext_(\d+)(?:_(\d+))?$/, async (ctx) => {
 
 // Utility: run /chatid inside any group to get its real chat ID for GROUP_ID in .env
 bot.command("chatid", (ctx) => {
-  const id   = ctx.chat.id;
+  const id = ctx.chat.id;
   const type = ctx.chat.type;
   const title = ctx.chat.title || ctx.chat.first_name || "private";
-  ctx.reply(`🆔 Chat ID: \`${id}\`\nType: ${type}\nName: ${title}`, { parse_mode: "Markdown" });
+  ctx.reply(`🆔 Chat ID: \`${id}\`\nType: ${type}\nName: ${title}`, {
+    parse_mode: "Markdown",
+  });
 });
 
-
-
-
-
-
+// Fallback for custom typed text messages
+bot.on("text", (ctx, next) => {
+  if (ctx.message.text.startsWith("/")) return next();
+  ctx.reply(
+    "⚠️ **ကျေးဇူးပြု၍ အောက်ပါ Menu Button များကို သာ အသုံးပြုပေးပါ။**",
+    mainMenu,
+  );
+});
