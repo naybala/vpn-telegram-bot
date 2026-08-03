@@ -9,6 +9,7 @@ const GROUP_ID = Number(process.env.GROUP_ID);   // Where notifications are sent
 const DEFAULT_LIMIT_GB = 100;
 const PLAN_DAYS = Number(process.env.PLAN_DAYS) || 30;  // Subscription duration in days
 const CREDIT_VALUE = Number(process.env.CREDIT_VALUE) || 500; // Ks value per referral credit
+const USER_LIMIT = Number(process.env.USER_LIMIT) || 0; // Max users per server (0 = unlimited)
 
 // Load Server Lists
 // API_URLS — required, filter blanks
@@ -98,6 +99,7 @@ module.exports = {
   DEFAULT_LIMIT_GB,
   PLAN_DAYS,
   CREDIT_VALUE,
+  USER_LIMIT,
   SERVERS,
   BOT_PROXY,
   adminAccount,

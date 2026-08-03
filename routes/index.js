@@ -5,7 +5,10 @@ const {
   SERVERS,
   PAYMENT_METHODS,
   GROUP_ID,
+  CREDIT_VALUE,
+  USER_LIMIT,
 } = require("../config");
+const db = require("../db");
 const { mainMenu } = require("../menus");
 const handleBalance = require("../handlers/balance");
 const handleGetKeys = require("../handlers/getKeys");
@@ -13,7 +16,6 @@ const { handlePhoto, forwardPaymentToAdmin, pendingPayments, userCreditState, as
 const { handleGenerate, executeGenerateKey } = require("../handlers/admin");
 const { handleExtend, executeExtendKey } = require("../handlers/extend");
 const { ensureUser, validateReferralCode, registerReferral, getReferralInfo } = require("../handlers/referral");
-const { CREDIT_VALUE } = require("../config");
 
 // ==================================================================
 // 👋 START COMMAND
@@ -79,6 +81,22 @@ function paymentDetails(server, pm) {
   );
 }
 
+// Helper: get active user count for each server from DB
+async function getServerUserCounts() {
+  const counts = {};
+  try {
+    const [rows] = await db.execute(
+      "SELECT server_index, COUNT(*) as count FROM user_keys WHERE status = 'active' GROUP BY server_index"
+    );
+    rows.forEach((r) => {
+      counts[r.server_index] = r.count;
+    });
+  } catch (e) {
+    console.warn("⚠️ Could not query server user counts:", e.message);
+  }
+  return counts;
+}
+
 // Buy — Step 1: Show server list
 bot.hears("၀ယ်မည်", async (ctx) => {
   const userId = ctx.from.id;
@@ -105,9 +123,15 @@ bot.hears("၀ယ်မည်", async (ctx) => {
     return ctx.reply("❌ ရရှိနိုင်သော Server မရှိသေးပါ။");
   }
 
+  const userCounts = await getServerUserCounts();
+
   // If only 1 server and 1 payment method, skip directly to payment details
   if (SERVERS.length === 1 && PAYMENT_METHODS.length === 1) {
-    return ctx.reply(paymentDetails(SERVERS[0], PAYMENT_METHODS[0]), {
+    const s = SERVERS[0];
+    if (USER_LIMIT > 0 && (userCounts[s.id] || 0) >= USER_LIMIT) {
+      return ctx.reply(`❌ **${s.name}** Server မှာ လူပြည့်သွားပါပြီ (Limit: ${USER_LIMIT})! Admin ထံ ဆက်သွယ်ပါ။`, { parse_mode: "Markdown" });
+    }
+    return ctx.reply(paymentDetails(s, PAYMENT_METHODS[0]), {
       parse_mode: "Markdown",
     });
   }
@@ -115,6 +139,9 @@ bot.hears("၀ယ်မည်", async (ctx) => {
   // If only 1 server but multiple payment methods, skip server step
   if (SERVERS.length === 1) {
     const s = SERVERS[0];
+    if (USER_LIMIT > 0 && (userCounts[s.id] || 0) >= USER_LIMIT) {
+      return ctx.reply(`❌ **${s.name}** Server မှာ လူပြည့်သွားပါပြီ (Limit: ${USER_LIMIT})! Admin ထံ ဆက်သွယ်ပါ။`, { parse_mode: "Markdown" });
+    }
     const buttons = paymentButtons(s.id);
     return ctx.reply(
       `🌐 **${s.name}** — ${s.price} / ${DEFAULT_LIMIT_GB}GB\n\n` +
@@ -127,16 +154,33 @@ bot.hears("၀ယ်မည်", async (ctx) => {
   }
 
   // Multiple servers — show server selection
-  const buttons = SERVERS.map((server) => [
-    Markup.button.callback(
-      `🌐 ${server.name} — ${server.price}`,
-      `select_server_${server.id}`,
-    ),
-  ]);
+  const buttons = SERVERS.map((server) => {
+    const activeCount = userCounts[server.id] || 0;
+    const isFull = USER_LIMIT > 0 && activeCount >= USER_LIMIT;
+
+    if (isFull) {
+      return [
+        Markup.button.callback(
+          `🌐 ${server.name} — ${server.price} (Full)`,
+          `server_full_${server.id}`,
+        ),
+      ];
+    } else {
+      return [
+        Markup.button.callback(
+          `🌐 ${server.name} — ${server.price}`,
+          `select_server_${server.id}`,
+        ),
+      ];
+    }
+  });
 
   let msg = `🌐 **VPN Server နေရာ ရွေးချယ်ပါ**\n\n`;
   SERVERS.forEach((server, index) => {
-    msg += `${index + 1}. **${server.name}** — ${server.price} / ${DEFAULT_LIMIT_GB}GB\n`;
+    const activeCount = userCounts[server.id] || 0;
+    const isFull = USER_LIMIT > 0 && activeCount >= USER_LIMIT;
+    const statusText = isFull ? " *(Full)*" : "";
+    msg += `${index + 1}. **${server.name}** — ${server.price} / ${DEFAULT_LIMIT_GB}GB${statusText}\n`;
   });
   msg += `\nမိမိ ဝယ်ယူလိုသော Server ကို Button မှ ရွေးချယ်ပါ:`;
 
@@ -146,11 +190,26 @@ bot.hears("၀ယ်မည်", async (ctx) => {
   });
 });
 
+// Server Full Action Handler
+bot.action(/^server_full_(\d+)$/, (ctx) => {
+  const serverId = parseInt(ctx.match[1], 10);
+  const server = SERVERS[serverId];
+  const name = server ? server.name : "ဤ Server";
+  return ctx.answerCbQuery(`❌ ${name} မှာ လူပြည့်သွားပါပြီ (Limit: ${USER_LIMIT})! အခြား Server ကို ရွေးပါ။`, { alert: true });
+});
+
 // Buy — Step 2: Server selected → show payment method selection
-bot.action(/^select_server_(\d+)$/, (ctx) => {
+bot.action(/^select_server_(\d+)$/, async (ctx) => {
   const serverId = parseInt(ctx.match[1], 10);
   const server = SERVERS[serverId];
   if (!server) return ctx.answerCbQuery("❌ Invalid Server");
+
+  if (USER_LIMIT > 0) {
+    const userCounts = await getServerUserCounts();
+    if ((userCounts[serverId] || 0) >= USER_LIMIT) {
+      return ctx.answerCbQuery(`❌ ${server.name} မှာ လူပြည့်သွားပါပြီ (Limit: ${USER_LIMIT})! အခြား Server ကို ရွေးပါ။`, { alert: true });
+    }
+  }
 
   ctx.answerCbQuery();
 
