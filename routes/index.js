@@ -1,5 +1,5 @@
 const { Input, Markup } = require("telegraf");
-const { bot } = require("../bot");
+const { bot, getClient } = require("../bot");
 const {
   DEFAULT_LIMIT_GB,
   SERVERS,
@@ -7,6 +7,7 @@ const {
   GROUP_ID,
   CREDIT_VALUE,
   USER_LIMIT,
+  adminAccount,
 } = require("../config");
 const db = require("../db");
 const { mainMenu } = require("../menus");
