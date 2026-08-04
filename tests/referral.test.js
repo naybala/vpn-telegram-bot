@@ -22,12 +22,10 @@ const {
   isFirstTimeBuyer,
 } = require("../handlers/referral");
 
-// Reset mock between tests
+// Reset mock between each test
 beforeEach(() => {
   db.execute.mockReset();
 });
-
-// ══════════════════════════════════════════════════════════════════
 // ensureUser
 // ══════════════════════════════════════════════════════════════════
 describe("ensureUser()", () => {

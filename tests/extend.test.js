@@ -169,7 +169,8 @@ describe("executeExtendKey()", () => {
     await executeExtendKey({ targetUserId: "111", keyDbId: 7, telegram });
 
     const [sql, params] = db.execute.mock.calls[0];
-    expect(sql).toMatch(/WHERE id = \?/);
+    // With keyDbId, it queries by id AND telegram_id
+    expect(sql).toMatch(/WHERE id = \? AND telegram_id = \?/);
     expect(params[0]).toBe(7);
   });
 
