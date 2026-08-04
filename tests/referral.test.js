@@ -153,12 +153,14 @@ describe("awardCredit()", () => {
   });
 
   test("continues silently if telegram notification fails", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     db.execute
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[{ credits: 1 }]]);
     const telegram = { sendMessage: jest.fn().mockRejectedValue(new Error("network")) };
     await expect(awardCredit("222", telegram)).resolves.not.toThrow();
+    warnSpy.mockRestore();
   });
 });
 

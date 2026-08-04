@@ -123,6 +123,7 @@ describe("executeExtendKey()", () => {
   });
 
   test("still extends expiry even if Outline API is unreachable", async () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const key = fakeKey();
     const client = {
       get: jest.fn().mockRejectedValue(new Error("timeout")),
@@ -138,6 +139,7 @@ describe("executeExtendKey()", () => {
     const result = await executeExtendKey({ targetUserId: "111", daysToAdd: 30, telegram });
     expect(result).toHaveProperty("daysToAdd", 30);
     expect(telegram.sendMessage).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   test("selects most recent active key when no keyDbId given", async () => {
