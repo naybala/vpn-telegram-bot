@@ -179,13 +179,14 @@ Set `USER_LIMIT=15` in `.env` to cap how many active users can be on each server
 
 ## 👮 Admin Commands
 
-| Command      | Usage                              | Description                             |
-| ------------ | ---------------------------------- | --------------------------------------- |
-| `/chatid`    | `/chatid`                          | Shows current chat/group ID             |
-| `/generate`  | `/generate <userId> [serverIndex]` | Manually generate a key for a user      |
-| `/extend`    | `/extend <userId> [days]`          | Extend subscription (+30 days, +100 GB) |
-| `/reissue`   | `/reissue <userId>`                | Re-create key while keeping expiry date |
-| `/deletekey` | `/deletekey <userId>`              | Revoke and delete user's active key     |
+| Command      | Usage                                           | Description                                          |
+| ------------ | ----------------------------------------------- | ---------------------------------------------------- |
+| `/chatid`    | `/chatid`                                       | Shows current chat/group ID                          |
+| `/generate`  | `/generate <userId> [serverIndex]`              | Manually generate a key for a user                   |
+| `/extend`    | `/extend <userId> [days]`                       | Extend subscription (+30 days, +100 GB)              |
+| `/reissue`   | `/reissue <userId>`                             | Re-create key while keeping expiry date              |
+| `/deletekey` | `/deletekey <userId>`                           | Revoke and delete user's active key                  |
+| `/synckey`   | `/synckey <userId> <keyId> [serverIndex] [days]`| Register an Outline-dashboard key into the DB        |
 
 ---
 

@@ -367,14 +367,16 @@ bot.hears("လမ်းညွှန်ချက်များ", async (ctx) => 
 bot.on("photo", handlePhoto);
 
 const handleReissue = require("../handlers/reissue");
+const handleSyncKey = require("../handlers/syncKey");
 
 // ==================================================================
 // 👮 ADMIN COMMANDS & ACTIONS
 // ==================================================================
-bot.command("generate", handleGenerate); // /generate <userId> [photoId] [serverIdx]
-bot.command("extend", handleExtend); // /extend <userId> [days]
-bot.command("reissue", handleReissue); // /reissue <userId>
+bot.command("generate", handleGenerate);   // /generate <userId> [photoId] [serverIdx]
+bot.command("extend", handleExtend);       // /extend <userId> [days]
+bot.command("reissue", handleReissue);     // /reissue <userId>
 bot.command("deletekey", handleAdminDeleteKey); // /deletekey <userId>
+bot.command("synckey", handleSyncKey);     // /synckey <userId> <keyId> [serverIdx] [days]
 
 // Admin Inline Action: Generate key
 bot.action(/^adm_gen_(\d+)_(\d+)(?:_(\d+))?$/, async (ctx) => {
