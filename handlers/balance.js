@@ -74,6 +74,14 @@ async function handleBalance(ctx) {
           reportMessage += `💾 Used: **${usedGB} GB** / ${limitGB} GB — Left: **${leftGB} GB**\n`;
           reportMessage += `[${bar}] ${percent}%\n`;
           reportMessage += `──────────────────\n`;
+        } else {
+          // Key exists in DB but not found in Outline API response
+          // (e.g. key was deleted from dashboard, or ID mismatch) — still show from DB
+          reportMessage += `🔑 **Key #${i + 1}** — ${serverName}\n`;
+          reportMessage += `📆 Created: **${createdAt}**\n`;
+          reportMessage += `${expiryText}\n`;
+          reportMessage += `⚠️ Data usage unavailable (Key ID: ${keyId})\n`;
+          reportMessage += `──────────────────\n`;
         }
       } catch (e) {
         reportMessage += `🔑 **Key #${i + 1} (${serverName})**: ⚠️ Server Offline\n`;
