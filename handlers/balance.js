@@ -54,9 +54,9 @@ async function handleBalance(ctx) {
           client.get("/metrics/transfer"),
         ]);
 
-        const keyData = keysRes.data.accessKeys.find((k) => k.id === keyId);
+        const keyData = keysRes.data.accessKeys.find((k) => String(k.id) === String(keyId));
         if (keyData) {
-          const usedBytes = metricsRes.data.bytesTransferredByUserId[keyId] || 0;
+          const usedBytes = metricsRes.data.bytesTransferredByUserId[String(keyId)] || 0;
           const limitBytes = keyData.dataLimit ? keyData.dataLimit.bytes : 0;
           const usedGB = (usedBytes / 1000 ** 3).toFixed(2);
           const limitGB = (limitBytes / 1000 ** 3).toFixed(2);
