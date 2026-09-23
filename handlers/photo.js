@@ -130,6 +130,7 @@ async function forwardPaymentToAdmin(ctx, { photoFileId, isRenewal, existingKeys
     const inlineButtons = [];
 
     if (isRenewal) {
+      // ── Section 1: Extend existing key(s) ──────────────────────────
       existingKeys.forEach((k) => {
         const sName = SERVERS[k.server_index]
           ? SERVERS[k.server_index].name
@@ -138,31 +139,36 @@ async function forwardPaymentToAdmin(ctx, { photoFileId, isRenewal, existingKeys
           ? `adm_ext_${userId}_${k.id}_${creditsToUse}`
           : `adm_ext_${userId}_${k.id}`;
         inlineButtons.push([
-          Markup.button.callback(`🔄 Extend: ${sName} (+${PLAN_DAYS} Days)`, cbData)
+          Markup.button.callback(`🔄 EXTEND existing key: ${sName} (+${PLAN_DAYS} Days +100GB)`, cbData)
         ]);
       });
     }
 
+    // ── Section 2: Generate a brand-new key on any server ──────────
     SERVERS.forEach((server, idx) => {
       const cbData = creditsToUse > 0
         ? `adm_gen_${userId}_${idx}_${creditsToUse}`
         : `adm_gen_${userId}_${idx}`;
       inlineButtons.push([
-        Markup.button.callback(`⚡ New Key: ${server.name}`, cbData)
+        Markup.button.callback(`⚡ NEW KEY: ${server.name}`, cbData)
       ]);
     });
 
     let actionText = `📋 **Action Needed for User \`${userId}\`**\n\n`;
+    if (isRenewal) {
+      actionText += `⚠️ This user already has ${existingKeys.length} active key(s).\n\n`;
+      actionText += `Choose carefully:\n`;
+      actionText += `• **🔄 EXTEND** → keeps same key, adds +${PLAN_DAYS} days +100GB\n`;
+      actionText += `• **⚡ NEW KEY** → creates a brand-new key (new row in DB)\n\n`;
+    }
     if (creditsToUse > 0) {
       actionText += `🎁 Credit Discount: **${creditsToUse} credits = ${creditsToUse * CREDIT_VALUE} Ks off**\n\n`;
     }
-    actionText += `Click button below to approve instantly:\n\n`;
-    actionText += `Manual command (tap to copy):\n`;
+    actionText += `Manual commands (tap to copy):\n`;
     if (isRenewal) {
       actionText += `\`\`\`\n/extend ${userId}\n\`\`\``;
-    } else {
-      actionText += `\`\`\`\n/generate ${userId} 1\n\`\`\``;
     }
+    actionText += `\`\`\`\n/generate ${userId} 1\n\`\`\``;
 
     await ctx.telegram.sendMessage(GROUP_ID, actionText, {
       parse_mode: "Markdown",
